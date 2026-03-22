@@ -16,7 +16,7 @@
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const SUPABASE_URL  = 'https://dmscfpnkswmfbfgcuwwb.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtc2NmcG5rc3dtZmJmZ2N1d3diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxOTYzMTYsImV4cCI6MjA4OTc3MjMxNn0.iRIYW_OiFAYjha-PoXQHf7gjwbhSfhGWdtyD_3ZgAOs';
+const SUPABASE_ANON ='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtc2NmcG5rc3dtZmJmZ2N1d3diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxOTYzMTYsImV4cCI6MjA4OTc3MjMxNn0.iRIYW_OiFAYjha-PoXQHf7gjwbhSfhGWdtyD_3ZgAOs';
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 window._sb = sb;
 
@@ -472,8 +472,7 @@ button{font-family:inherit;cursor:pointer;}
         </button>
       </div>
       <div id="stream-warn">
-        Browser security blocks the stream on this page.<br/>
-        <a href="https://amaicamedia.com/" target="_blank" style="color:#ffe082;font-weight:700;text-decoration:underline;">Open direct stream link →</a>
+        <a href="https://s40.myradiostream.com:23535/listen" target="_blank" style="color:#ffe082;font-weight:700;text-decoration:underline;">Open live stream in browser →</a>
       </div>
     </div>
   </div>
@@ -808,7 +807,7 @@ button{font-family:inherit;cursor:pointer;}
     </div>
     <div class="setting-row">
       <div class="setting-row-label"><p>Open in browser</p><p>If stream won't play in app</p></div>
-      <a href="http://amaicamedia.com/livestream/" target="_blank" class="btn-ghost" style="font-size:.72rem;padding:6px 11px;">Open →</a>
+      <a href="https://s40.myradiostream.com:23535/listen" target="_blank" class="btn-ghost" style="font-size:.72rem;padding:6px 11px;">Open →</a>
     </div>
   </div>
 
@@ -878,8 +877,9 @@ button{font-family:inherit;cursor:pointer;}
 
 <!-- AUDIO ENGINE — multiple source fallbacks -->
 <audio id="radio-audio" preload="none">
-  <source src="https://amaicamedia.com/" type="audio/mpeg"/>
-  <source src="https://amaicamedia.com/;stream.mp3" type="audio/mpeg"/>
+  <source src="https://s40.myradiostream.com:23535/listen" type="audio/mpeg"/>
+  <source src="http://s40.myradiostream.com:23535/listen" type="audio/mpeg"/>
+  <source src="http://s40.myradiostream.com:23535/;stream.mp3" type="audio/mpeg"/>
 </audio>
 
 <script>
@@ -910,6 +910,31 @@ window.addEventListener('load', () => {
   if (!sbConfigured()) { const b = document.getElementById('sb-status'); if (b) b.classList.add('visible'); }
   syncLocalProfileUI();
   updateSettingsThemeButtons();
+
+  // Detect file:// protocol — audio cannot stream from local files
+  if (location.protocol === 'file:') {
+    const warn = document.getElementById('stream-warn');
+    if (warn) {
+      warn.style.display = 'block';
+      warn.innerHTML = '<strong>To hear the stream:</strong> This file must be hosted on a web server or opened via a local server — browsers block audio from local files (file://).<br/><br/>' +
+        'Quick options:<br/>' +
+        '1. <a href="https://s40.myradiostream.com:23535/listen" target="_blank" style="color:#ffe082;font-weight:700;">Open stream directly in browser →</a><br/>' +
+        '2. Host this file on a server (Netlify, GitHub Pages, or your own hosting)';
+    }
+    // Patch the play button to open the stream directly instead
+    const playBtn = document.getElementById('listen-btn');
+    if (playBtn) {
+      playBtn.onclick = () => window.open('https://s40.myradiostream.com:23535/listen', '_blank');
+    }
+    const miniBtn = document.getElementById('mini-play-btn');
+    if (miniBtn) {
+      miniBtn.onclick = (e) => { e.stopPropagation(); window.open('https://s40.myradiostream.com:23535/listen', '_blank'); };
+    }
+    const fullBtn = document.getElementById('play-btn-full');
+    if (fullBtn) {
+      fullBtn.onclick = () => window.open('https://s40.myradiostream.com:23535/listen', '_blank');
+    }
+  }
 });
 
 // ── THEME ────────────────────────────────────────────────────────
@@ -940,7 +965,7 @@ function navigateTo(s) {
 
 // ── SHOUTCAST NOW-PLAYING METADATA ───────────────────────────────
 // Polls Shoutcast stats via public CORS proxy — no backend required
-const SHOUTCAST_STATS = 'http://s40.myradiostream.com:23535/stats?json=1';
+const SHOUTCAST_STATS = 'https://s40.myradiostream.com:23535/stats?json=1';
 const CORS_PROXIES = [
   'https://corsproxy.io/?',
   'https://api.allorigins.win/raw?url='
@@ -993,9 +1018,9 @@ let isPlaying = false, vol = 0.8;
 
 // All stream URL candidates — tried in order on failure
 const STREAM_URLS = [
-  'http://amaicamedia.com/',
-  'https://amaicamedia.com/;stream.mp3',
-  'https://amaicamedia.com/'
+  'https://s40.myradiostream.com:23535/listen',
+  'http://s40.myradiostream.com:23535/listen',
+  'http://s40.myradiostream.com:23535/;stream.mp3'
 ];
 let streamIdx = 0, stallTimer = null, retryTimer = null;
 const STALL_MS = 12000;
@@ -1016,16 +1041,16 @@ function startStallWatcher() {
 function retryStream() {
   clearTimeout(retryTimer);
   audio.pause();
-  streamIdx = (streamIdx + 1) % STREAM_URLS.length;
+  streamIdx++;
+  if (streamIdx >= STREAM_URLS.length) { handlePlayError(); return; }
   audio.src = STREAM_URLS[streamIdx];
   audio.load();
-  retryTimer = setTimeout(() => { audio.volume = vol; audio.play().catch(handlePlayError); }, 800);
+  retryTimer = setTimeout(() => { audio.volume = vol; audio.play().catch(handlePlayError); }, 1000);
 }
 function handlePlayError() {
-  if (streamIdx < STREAM_URLS.length - 1) { retryStream(); return; }
-  // All streams exhausted — show direct open link
+  // All streams exhausted
   isPlaying = false; setIcons('play_arrow');
-  setStatus('<a href="https://amaicamedia.com/" target="_blank" style="color:var(--c-primary);text-decoration:none;">Stream blocked here — open direct link</a>');
+  setStatus('<a href="https://s40.myradiostream.com:23535/listen" target="_blank" style="color:var(--c-primary);text-decoration:none;">Tap to open stream directly →</a>');
   document.getElementById('pulse-ring').style.animationPlayState = 'paused';
   stopMiniWave();
   const warn = document.getElementById('stream-warn'); if (warn) warn.style.display = 'block';
@@ -1058,6 +1083,7 @@ function togglePlay() {
     document.getElementById('pulse-ring').style.animationPlayState = 'running';
     startMiniWave();
     streamIdx = 0;
+    const warn = document.getElementById('stream-warn'); if (warn) warn.style.display = 'none';
     audio.src = STREAM_URLS[0]; audio.load();
     audio.volume = vol;
     audio.play().catch(handlePlayError);
