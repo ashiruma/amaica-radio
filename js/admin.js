@@ -340,7 +340,7 @@
         </div>
         ` : ''}
 
-        <!-- CONTACT MESSAGES (all staff) -->
+        <!-- LIVE POLL MANAGER (all staff) -->\r\n        <div class="auth-card" style="margin-bottom:20px;">\r\n          <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);margin-bottom:10px;">📊 Live Poll Manager</p>\r\n          <div id="admin-active-poll" style="margin-bottom:14px;"></div>\r\n          <p style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--c-on-surface-variant);margin-bottom:8px;">Launch New Poll</p>\r\n          <div style="display:flex;flex-direction:column;gap:8px;">\r\n            <input id="adm-poll-q" type="text" placeholder="Poll question…"\r\n              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;width:100%;"/>\r\n            <input id="adm-poll-o1" type="text" placeholder="Option 1"\r\n              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>\r\n            <input id="adm-poll-o2" type="text" placeholder="Option 2"\r\n              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>\r\n            <input id="adm-poll-o3" type="text" placeholder="Option 3 (optional)"\r\n              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>\r\n            <input id="adm-poll-o4" type="text" placeholder="Option 4 (optional)"\r\n              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>\r\n            <button class="btn-primary" onclick="adminLaunchPoll()" style="justify-content:center;">🚀 Push Poll Live</button>\r\n          </div>\r\n        </div>\r\n\r\n        <!-- CONTACT MESSAGES (all staff) -->
         <div class="auth-card" style="margin-bottom:20px;">
           <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);margin-bottom:10px;">💬 Contact Messages</p>
           <div id="admin-contact-list"></div>
@@ -353,6 +353,7 @@
     renderAdminRewardsEditor();
     renderAdminMarketEditor();
     renderAdminContactMessages();
+    renderAdminPollManager();
     if (isSuperuser) {
       renderAdminStats();
       renderStaffList();
@@ -518,6 +519,70 @@
     renderScheduleList();
     if (window.loadScheduleFromSupabase) loadScheduleFromSupabase();
     if (window.showToast) showToast('Show removed', 'check_circle');
+  };
+
+  // ── LIVE POLL MANAGER ─────────────────────────────────────────
+  async function renderAdminPollManager() {
+    const el = document.getElementById('admin-active-poll');
+    if (!el || !window._sb) { if (el) el.innerHTML = '<p style="font-size:.72rem;opacity:.5;">Connect to Supabase to manage polls.</p>'; return; }
+    const { data } = await window._sb.from('polls').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(1).single().catch(() => ({ data: null }));
+    if (!data) {
+      el.innerHTML = '<p style="font-size:.72rem;color:var(--c-on-surface-variant);">No active poll. Launch one below.</p>';
+    } else {
+      const votes = data.votes || data.options.map(() => 0);
+      const total = votes.reduce((a, b) => a + b, 0);
+      const opts = data.options.map((o, i) => {
+        const pct = total ? Math.round((votes[i] / total) * 100) : 0;
+        return `<div style="display:flex;justify-content:space-between;font-size:.78rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+          <span>${o}</span>
+          <span style="color:var(--c-primary);font-weight:800;">${votes[i]} (${pct}%)</span>
+        </div>`;
+      }).join('');
+      el.innerHTML = `
+        <div style="background:rgba(232,65,24,.08);border:1px solid rgba(232,65,24,.25);border-radius:10px;padding:12px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+            <span style="font-size:.6rem;font-weight:800;color:#e84118;text-transform:uppercase;letter-spacing:.1em;">● Live Now · ${total} votes</span>
+            <button onclick="adminClosePoll('${data.id}')" style="font-size:.65rem;padding:3px 10px;border-radius:20px;background:rgba(232,65,24,.15);border:1px solid rgba(232,65,24,.3);color:#e84118;cursor:pointer;font-weight:700;">End Poll</button>
+          </div>
+          <p style="font-size:.82rem;font-weight:700;margin-bottom:8px;">${data.question}</p>
+          ${opts}
+        </div>`;
+    }
+  }
+
+  window.adminLaunchPoll = async function () {
+    if (!window._sb) { alert('Not connected to database.'); return; }
+    const q = document.getElementById('adm-poll-q')?.value.trim();
+    const opts = ['adm-poll-o1','adm-poll-o2','adm-poll-o3','adm-poll-o4']
+      .map(id => document.getElementById(id)?.value.trim()).filter(Boolean);
+    if (!q) { alert('Enter a poll question.'); return; }
+    if (opts.length < 2) { alert('Add at least 2 options.'); return; }
+
+    // Close any existing active poll first
+    await window._sb.from('polls').update({ is_active: false }).eq('is_active', true);
+
+    const { error } = await window._sb.from('polls').insert({
+      question: q,
+      options: opts,
+      votes: opts.map(() => 0),
+      is_active: true,
+      created_at: new Date().toISOString()
+    });
+    if (error) { alert('Error: ' + error.message); return; }
+
+    // Clear inputs
+    ['adm-poll-q','adm-poll-o1','adm-poll-o2','adm-poll-o3','adm-poll-o4'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    renderAdminPollManager();
+    if (window.showToast) showToast('Poll is now live! 🚀', 'how_to_vote');
+  };
+
+  window.adminClosePoll = async function (pollId) {
+    if (!window._sb) return;
+    await window._sb.from('polls').update({ is_active: false }).eq('id', pollId);
+    renderAdminPollManager();
+    if (window.showToast) showToast('Poll ended.', 'check_circle');
   };
 
   // ── FEED EDITOR ───────────────────────────────────────────────

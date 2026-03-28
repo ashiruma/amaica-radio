@@ -64,41 +64,13 @@
 
     <!-- HOME -->
     <div id="screen-home" class="screen active">
-      <div class="now-on-air" id="now-on-air-card">
-        <div class="noa-glow"></div>
-        <div id="hero-wave-bg" class="noa-wave-bg"></div>
-        <div class="noa-top">
-          <div class="live-badge"><span class="live-dot"></span>Live · 98.7 FM</div>
-          <div class="listeners-pill">
-            <span class="material-symbols-outlined" style="font-size:12px;">headphones</span>
-            <span id="listener-count" class="listener-count-el">—</span>
-          </div>
-        </div>
-        <div class="noa-body">
-          <div class="noa-orb">
-            <div class="noa-orb-pulse" id="noa-orb-pulse"></div>
-            <span class="material-symbols-outlined">radio</span>
-          </div>
-          <div class="noa-info">
-            <p class="noa-eyebrow">NOW ON AIR</p>
-            <h2 class="noa-title" id="hero-show-title">Amaica Media</h2>
-            <p class="noa-host" id="hero-show-host">98.7 FM · Live</p>
-            <div class="noa-actions">
-              <button class="btn-primary" onclick="handleListenNow()"><span class="material-symbols-outlined"
-                  style="font-size:14px;">play_arrow</span>Listen Now</button>
-              <div class="pulse-dot"
-                style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.2);margin-left:4px;"></div>
-              <span id="player-status" style="font-size:.65rem;color:var(--c-on-surface-variant);">98.7 FM — Tap to
-                play</span>
-            </div>
-          </div>
-        </div>
-        <div class="noa-bar">
-          <div class="noa-bar-fill" id="noa-bar-fill"></div>
-        </div>
-        <div class="next-up-strip">
-          <span class="nu-badge">Next Up</span>
-          <span class="nu-label"><strong>Loading…</strong></span>
+      <!-- MINIMAL PLAY BUTTON -->
+      <div class="hero-minimal">
+        <div class="play-circle-wrap" onclick="toggleRadio()">
+          <div class="play-ring"></div>
+          <button class="play-main-clean" id="main-orb-btn">
+            <span class="material-symbols-outlined" id="orb-icon" style="font-size:40px;font-variation-settings:'FILL' 1;">play_arrow</span>
+          </button>
         </div>
       </div>
 
@@ -273,23 +245,27 @@
 
     <!-- COMMUNITY -->
     <div id="screen-community" class="screen">
-      <h1 class="screen-title">COMMUNITY</h1>
-      <p class="screen-sub">Chat live. Earn <strong style="color:var(--c-primary);">+5 pts</strong> per message during
-        shows.</p>
+      <h1 class="screen-title">LIVE CHAT</h1>
+      <p class="screen-sub">What's on your mind? Every message earns <strong style="color:var(--c-primary);">+5 pts</strong>.</p>
       <div class="chip-row" id="chat-filters">
-        <button class="chip active" onclick="setChip(this,'chat-filters')">Live Chat</button>
+        <button class="chip active" onclick="switchCommunityTab(this,'chat-filters','comm-chat-panel')">Live Chat</button>
         <button class="chip" onclick="openCallIn()">Call-In</button>
-        <button class="chip" onclick="setChip(this,'chat-filters')">Polls</button>
+        <button class="chip" onclick="switchCommunityTab(this,'chat-filters','comm-polls-panel')">Polls</button>
       </div>
-      <div class="chat-wrap">
+
+      <!-- LIVE CHAT PANEL -->
+      <div id="comm-chat-panel" class="chat-wrap">
         <div class="chat-msgs no-scrollbar" id="chat-messages"></div>
         <div class="chat-input-row">
-          <input class="chat-input" id="chat-input" type="text" placeholder="Say something to the stream…"
+          <input class="chat-input" id="chat-input" type="text" placeholder="Sema kitu — wewe ni sehemu ya show hii…"
             onkeydown="if(event.key==='Enter')sendChat()" />
           <button class="chat-send" onclick="sendChat()"><span class="material-symbols-outlined"
               style="font-size:16px;">send</span></button>
         </div>
       </div>
+
+      <!-- POLLS PANEL -->
+      <div id="comm-polls-panel" style="display:none;padding-top:6px;"></div>
     </div>
 
     <!-- REWARDS -->
@@ -770,17 +746,25 @@
 
   <!-- MINI PLAYER -->
   <div id="mini-player" onclick="navigateTo('player')">
-    <div class="mp-art"><span class="material-symbols-outlined"
-        style="font-size:18px;color:var(--c-primary);font-variation-settings:'FILL' 1;z-index:1;">radio</span>
+    <div class="mp-art">
+      <span class="material-symbols-outlined" style="font-size:18px;color:var(--c-primary);font-variation-settings:'FILL' 1;z-index:1;">radio</span>
       <div class="pulse-ring" id="pulse-ring"></div>
     </div>
     <div class="mp-info">
+      <div class="mp-live-row">
+        <span class="mp-live-dot"></span>
+        <span class="mp-live-label">LIVE</span>
+        <span class="mp-freq">98.7 FM</span>
+      </div>
       <p class="mp-title" id="mini-show-title">Amaica Media</p>
       <p class="mp-sub" id="connect-status">Tap to open player</p>
     </div>
-    <div id="mini-wave" style="display:flex;align-items:center;gap:2px;margin-right:6px;opacity:.4;"></div>
-    <button class="mini-play" onclick="event.stopPropagation();toggleRadio()"><span class="material-symbols-outlined"
-        id="main-play" style="font-size:18px;font-variation-settings:'FILL' 1;">play_arrow</span></button>
+    <div id="mini-wave" class="mp-wave-bars">
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <button class="mini-play" onclick="event.stopPropagation();toggleRadio()">
+      <span class="material-symbols-outlined" id="main-play" style="font-size:20px;font-variation-settings:'FILL' 1;">play_arrow</span>
+    </button>
   </div>
 
   <!-- BOTTOM NAV -->

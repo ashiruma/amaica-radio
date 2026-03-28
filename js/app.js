@@ -235,7 +235,6 @@
   // ══════════════════════════════════════════════════════════════
   window.createEmbers = function (isBurst) {
     isBurst = !!isBurst;
-    if (!window.isPlaying?.() && !isBurst) return;
     const container = document.getElementById('main-content');
     if (!container) return;
     const count = isBurst ? 20 : 1;
@@ -253,13 +252,13 @@
       ember.style.boxShadow = `0 0 10px ${ember.style.background}`;
       const duration = 2 + Math.random() * 3;
       ember.style.animation = `float-up ${duration}s ease-out forwards`;
-      document.body.appendChild(ember);
+      container.appendChild(ember);
       setTimeout(() => ember.remove(), duration * 1000);
     }
   };
 
-  // Continuous trickle (only fires when playing or on home/player)
-  setInterval(() => createEmbers(false), 300);
+  // Continuous trickle — always active, matching index_5 behaviour
+  setInterval(createEmbers, 300);
 
   // ══════════════════════════════════════════════════════════════
   //  💗 VIBE ENGINE  (enhanced version from index_5)
@@ -806,12 +805,7 @@
   };
 
   // ── Chat ─────────────────────────────────────────────────────
-  const seedMsgs = [
-    { u: 'Marcus R.', text: 'DJ Echo is fire tonight', own: false, time: '9:42 PM', pts: true },
-    { u: 'Elena V.', text: "Been tuned in for 2 hours. Can't leave!", own: false, time: '9:44 PM', pts: false },
-    { u: 'You', text: 'Just joined — this is the vibe', own: true, time: '9:45 PM', pts: false },
-    { u: 'J. Aris', text: "Who's calling in next?", own: false, time: '9:46 PM', pts: true },
-  ];
+  const seedMsgs = []; // No pre-loaded messages — chat is live only, like YouTube/Instagram Live
 
   function buildMsg(m) {
     const d = document.createElement('div');
@@ -822,13 +816,20 @@
 
   window.appendChatMsg = function (m) {
     const c = document.getElementById('chat-messages'); if (!c) return;
+    // Clear empty state on first real message
+    const empty = c.querySelector('.chat-empty-state');
+    if (empty) empty.remove();
     c.appendChild(buildMsg(m)); c.scrollTop = c.scrollHeight;
   };
 
   function initChat() {
     const c = document.getElementById('chat-messages'); if (!c) return;
-    seedMsgs.forEach(m => c.appendChild(buildMsg(m)));
-    c.scrollTop = c.scrollHeight;
+    // Show empty state — messages populate in real time as listeners send them
+    c.innerHTML = `<div class="chat-empty-state">
+      <span class="material-symbols-outlined" style="font-size:2rem;opacity:.3;">forum</span>
+      <p>The conversation starts here.</p>
+      <p style="font-size:.7rem;opacity:.5;">Be the first to say something — your message goes live instantly.</p>
+    </div>`;
   }
 
   window.sendChat = function () {
@@ -836,22 +837,15 @@
     const txt = inp?.value.trim(); if (!txt) return;
     const c = document.getElementById('chat-messages'); if (!c) return;
     const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    // Clear empty state on first message
+    const empty = c.querySelector('.chat-empty-state');
+    if (empty) empty.remove();
     c.appendChild(buildMsg({ u: window._profile?.username || window._localUser || 'You', text: txt, own: true, time: t, pts: false }));
     c.scrollTop = c.scrollHeight; inp.value = '';
     window._localChatMsgs++; updateChatMission(); saveLocal();
     sbEarnPoints(window.APP_CONFIG?.CHAT_PTS || 5, 'Sent message');
     showToast('+' + (window.APP_CONFIG?.CHAT_PTS || 5) + ' Pulse Points!', 'stars');
     if (window.sbSendMessage) sbSendMessage(txt);
-    const rs = [{ u: 'Elena V.', text: 'Absolutely! 🔥' }, { u: 'Marcus R.', text: "That's it!" }, { u: 'J. Aris', text: 'Welcome!' }];
-    const r = rs[Math.floor(Math.random() * rs.length)];
-    const typing = document.createElement('div');
-    typing.className = 'cmsg'; typing.id = 'typing-indicator';
-    typing.innerHTML = `<div class="cav">${r.u.charAt(0)}</div><div class="cbw"><p class="cuser">${r.u}</p><div class="cbubble" style="display:flex;gap:4px;align-items:center;padding:10px 14px;"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div></div>`;
-    c.appendChild(typing); c.scrollTop = c.scrollHeight;
-    setTimeout(() => {
-      typing.remove();
-      appendChatMsg({ u: r.u, text: r.text, own: false, time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), pts: true });
-    }, 1000 + Math.random() * 600);
   };
 
   window.homeQuickChat = function () {
@@ -1007,6 +1001,141 @@
   window.setChip = function (el, gid) {
     document.querySelectorAll('#' + gid + ' .chip').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
+  };
+
+  // ── Community Tab Switcher ────────────────────────────────────
+  window.switchCommunityTab = function (el, gid, panelId) {
+    setChip(el, gid);
+    ['comm-chat-panel', 'comm-polls-panel'].forEach(id => {
+      const p = document.getElementById(id);
+      if (p) p.style.display = id === panelId ? (id === 'comm-chat-panel' ? 'flex' : 'block') : 'none';
+    });
+    if (panelId === 'comm-polls-panel') loadActivePoll();
+  };
+
+  // ── Polls (admin-controlled via Supabase) ────────────────────
+  // Required Supabase table (run once in Supabase SQL editor):
+  // CREATE TABLE polls (
+  //   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  //   question text NOT NULL,
+  //   options jsonb NOT NULL,   -- array of strings, e.g. ["Option A","Option B"]
+  //   votes jsonb NOT NULL DEFAULT '[]', -- parallel array of counts
+  //   is_active boolean DEFAULT true,
+  //   created_at timestamptz DEFAULT now()
+  // );
+  // CREATE TABLE poll_votes (
+  //   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  //   poll_id uuid REFERENCES polls(id),
+  //   user_fingerprint text,
+  //   option_index int,
+  //   created_at timestamptz DEFAULT now(),
+  //   UNIQUE(poll_id, user_fingerprint)
+  // );
+
+  let _activePoll = null;
+  let _pollSubscription = null;
+
+  // Fingerprint: anonymous device ID (no login required to vote)
+  function getPollFingerprint() {
+    let fp = localStorage.getItem('amaica_fp');
+    if (!fp) { fp = 'fp_' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('amaica_fp', fp); }
+    return fp;
+  }
+
+  async function loadActivePoll() {
+    const panel = document.getElementById('comm-polls-panel');
+    if (!panel) return;
+
+    // No Supabase — show offline state
+    if (!window._sb) {
+      panel.innerHTML = `<div class="poll-empty-state"><span class="material-symbols-outlined" style="font-size:2rem;color:var(--c-on-surface-variant);">how_to_vote</span><p>Polls are launched live by the presenter during the show.</p><p style="font-size:.7rem;opacity:.6;margin-top:6px;">Check back when a show is on air.</p></div>`;
+      return;
+    }
+
+    panel.innerHTML = `<div class="poll-empty-state"><span class="material-symbols-outlined" style="font-size:1.4rem;opacity:.4;animation:spin 1s linear infinite;">progress_activity</span></div>`;
+
+    const { data } = await window._sb.from('polls').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(1).single();
+
+    if (!data) {
+      panel.innerHTML = `<div class="poll-empty-state"><span class="material-symbols-outlined" style="font-size:2rem;color:var(--c-on-surface-variant);">how_to_vote</span><p>No poll is live right now.</p><p style="font-size:.7rem;opacity:.6;margin-top:6px;">The presenter will launch one during the show — check back!</p></div>`;
+    } else {
+      _activePoll = data;
+      await renderActivePoll(data);
+    }
+
+    // Subscribe to realtime poll changes (new poll pushed by admin)
+    if (_pollSubscription) { _pollSubscription.unsubscribe(); }
+    _pollSubscription = window._sb.channel('polls-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, async payload => {
+        if (payload.new?.is_active) {
+          _activePoll = payload.new;
+          await renderActivePoll(payload.new);
+        } else if (!payload.new?.is_active && _activePoll?.id === payload.new?.id) {
+          // Poll was closed by admin
+          panel.innerHTML = `<div class="poll-empty-state"><span class="material-symbols-outlined" style="font-size:2rem;color:var(--c-on-surface-variant);">how_to_vote</span><p>The poll has ended. Stay tuned for the next one!</p></div>`;
+          _activePoll = null;
+        }
+      }).subscribe();
+  }
+
+  async function renderActivePoll(poll) {
+    const panel = document.getElementById('comm-polls-panel');
+    if (!panel) return;
+    const fp = getPollFingerprint();
+    const options = poll.options || [];
+    const votes = poll.votes || options.map(() => 0);
+    const total = votes.reduce((a, b) => a + b, 0);
+
+    // Check if this device already voted
+    const { data: existingVote } = await window._sb.from('poll_votes')
+      .select('option_index').eq('poll_id', poll.id).eq('user_fingerprint', fp).single().catch(() => ({ data: null }));
+    const hasVoted = !!existingVote;
+    const votedIdx = existingVote?.option_index ?? -1;
+
+    panel.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'poll-card';
+    card.id = 'poll-active-card';
+
+    const liveTag = `<span style="display:inline-flex;align-items:center;gap:4px;font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#e84118;margin-bottom:10px;"><span style="width:6px;height:6px;border-radius:50%;background:#e84118;animation:pulse-dot 1.2s infinite;"></span>LIVE POLL</span>`;
+    const q = `<p class="poll-q">${poll.question}</p>`;
+
+    let optsHtml = `<div class="poll-options" id="poll-opts-wrap">`;
+    options.forEach((opt, i) => {
+      const pct = total ? Math.round((votes[i] / total) * 100) : 0;
+      if (hasVoted) {
+        const isVoted = i === votedIdx;
+        optsHtml += `<div class="poll-result-row${isVoted ? ' voted' : ''}">
+          <div class="poll-result-fill" style="width:${pct}%"></div>
+          <span class="poll-result-label">${opt}${isVoted ? ' ✓' : ''}</span>
+          <span class="poll-result-pct">${pct}%</span>
+        </div>`;
+      } else {
+        optsHtml += `<button class="poll-opt-btn" onclick="castPollVote('${poll.id}',${i})">${opt}</button>`;
+      }
+    });
+    optsHtml += `</div>`;
+
+    const meta = `<p class="poll-meta" id="poll-vote-meta">${total.toLocaleString()} ${total === 1 ? 'vote' : 'votes'}${hasVoted ? ' · You voted' : ''}</p>`;
+    card.innerHTML = liveTag + q + optsHtml + meta;
+    panel.appendChild(card);
+  }
+
+  window.castPollVote = async function (pollId, optionIndex) {
+    if (!window._sb) { showToast('Connect to vote', 'error'); return; }
+    const fp = getPollFingerprint();
+    const { error: voteErr } = await window._sb.from('poll_votes').insert({ poll_id: pollId, user_fingerprint: fp, option_index: optionIndex });
+    if (voteErr) { showToast('You already voted!', 'info'); return; }
+
+    // Increment vote count in polls table
+    const { data: poll } = await window._sb.from('polls').select('votes, options').eq('id', pollId).single();
+    const votes = poll.votes || poll.options.map(() => 0);
+    votes[optionIndex] = (votes[optionIndex] || 0) + 1;
+    await window._sb.from('polls').update({ votes }).eq('id', pollId);
+
+    sbEarnPoints && sbEarnPoints(10, 'Poll vote');
+    showToast && showToast('+10 Pulse Points! Asante kwa kura yako 🙌', 'how_to_vote');
+    if (_activePoll) { _activePoll.votes = votes; await renderActivePoll(_activePoll); }
   };
 
   window.showRSec = function (s) {
@@ -1388,9 +1517,9 @@ window.renderAppFooter = function () {
       </div>` : ''}
 
       <!-- Legal Links -->
-      <p style="font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;
-                color:var(--c-on-surface-variant);margin-bottom:12px;">Legal</p>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:24px;">
+      <p style="font-size:.72rem;font-weight:900;text-transform:uppercase;letter-spacing:.18em;
+                color:var(--c-on-surface);margin-bottom:16px;">Legal</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:24px;">
         ${[
       ['Terms of Service', 'terms'],
       ['Privacy Policy', 'privacy'],
@@ -1399,12 +1528,13 @@ window.renderAppFooter = function () {
       ['Marketplace Terms', 'marketplace-terms'],
     ].map(([label, slug]) => `
           <a href="${window.APP_CONFIG?.LEGAL_BASE_URL || '#'}/${slug}"
-            style="font-size:.72rem;color:var(--c-on-surface-variant);text-decoration:none;
-                   padding:4px 0;border-bottom:1px solid transparent;"
-            onmouseover="this.style.borderBottomColor='var(--c-primary)'"
-            onmouseout="this.style.borderBottomColor='transparent'">
+            style="font-size:.78rem;font-weight:700;color:var(--c-on-surface);text-decoration:none;
+                   padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.06);
+                   border:1px solid rgba(255,255,255,0.15);display:inline-block;"
+            onmouseover="this.style.background='rgba(232,65,24,0.15)';this.style.borderColor='rgba(232,65,24,0.5)';this.style.color='#ff8f6f'"
+            onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='var(--c-on-surface)'">
             ${label}
-          </a>`).join('<span style="color:var(--c-outline);font-size:.6rem;">·</span>')}
+          </a>`).join('')}
       </div>
 
       <!-- Bottom -->
