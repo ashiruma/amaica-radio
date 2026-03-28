@@ -68,14 +68,37 @@
   }
 
   window.updateLocalUI = function () {
-    const pts = window._localPoints;
+    const pts = window._profile?.points ?? window._localPoints;
     const f = pts.toLocaleString();
-    ['points-display', 'profile-pts-num'].forEach(id => {
+    ['points-display', 'points-display-rwd', 'profile-pts-num'].forEach(id => {
       const e = document.getElementById(id);
       if (e) animateCounter(e, parseInt(e.textContent.replace(/,/g, '')) || 0, pts);
     });
     const pp = document.getElementById('profile-pts'); if (pp) pp.textContent = f + ' pts';
     const lb = document.getElementById('lb-your-pts'); if (lb) lb.textContent = f + ' pts';
+
+    // Update tier progress bar
+    const tiers = window.APP_CONFIG?.TIERS || { bronze: 0, silver: 500, gold: 2000, superfan: 5000 };
+    const tierKeys = Object.keys(tiers);
+    let currentTier = 'bronze', nextTier = 'silver', nextPts = 500;
+    for (let i = 0; i < tierKeys.length; i++) {
+      if (pts >= tiers[tierKeys[i]]) {
+        currentTier = tierKeys[i];
+        nextTier = tierKeys[i + 1] || null;
+        nextPts = nextTier ? tiers[nextTier] : null;
+      }
+    }
+    const prevPts = tiers[currentTier] || 0;
+    const pct = nextPts ? Math.min(100, Math.round(((pts - prevPts) / (nextPts - prevPts)) * 100)) : 100;
+    const bar = document.getElementById('tier-progress-bar');
+    if (bar) bar.style.width = pct + '%';
+    const lbl = document.getElementById('tier-next-label');
+    if (lbl) lbl.textContent = nextTier ? `Next: ${nextTier.charAt(0).toUpperCase() + nextTier.slice(1)} at ${nextPts.toLocaleString()} pts` : '🏆 Max Tier Reached!';
+
+    // Highlight active tier badge
+    document.querySelectorAll('.tier-badge').forEach(b => {
+      b.classList.toggle('active', b.dataset.tier === currentTier);
+    });
   };
 
   window.showPtsPop = function (pts) {
@@ -230,7 +253,7 @@
       ember.style.boxShadow = `0 0 10px ${ember.style.background}`;
       const duration = 2 + Math.random() * 3;
       ember.style.animation = `float-up ${duration}s ease-out forwards`;
-      container.appendChild(ember);
+      document.body.appendChild(ember);
       setTimeout(() => ember.remove(), duration * 1000);
     }
   };
@@ -285,19 +308,86 @@
   };
 
   // ══════════════════════════════════════════════════════════════
-  //  🏢 SPONSORSHIP SYSTEM
+  //  🏢 DYNAMIC SPONSORSHIP SYSTEM
   // ══════════════════════════════════════════════════════════════
-  window.setSponsor = function (brand) {
-    const brands = {
-      'default': { color: '#76b82a', name: 'Amaica Media' },
-      'safaricom': { color: '#49aa10', name: 'Safaricom Friday' },
-      'airtel': { color: '#ff0000', name: 'Airtel Live' },
-      'kcb': { color: '#005da3', name: 'KCB Hour' }
-    };
-    const s = brands[brand] || brands['default'];
-    document.documentElement.style.setProperty('--sponsor-color', s.color);
-    document.documentElement.style.setProperty('--c-primary', s.color);
-    showToast(`App powered by ${s.name}`, 'verified');
+  let _activeSponsor = null;
+
+  window.loadSponsors = async function () {
+    if (!window._sb) return;
+    try {
+      const now = new Date().toISOString();
+      const { data } = await window._sb
+        .from('sponsors')
+        .select('*')
+        .eq('active', true)
+        .lte('start_date', now)
+        .gte('end_date', now)
+        .order('priority', { ascending: false });
+      if (!data || data.length === 0) return;
+      // Pick highest priority active sponsor
+      _activeSponsor = data[0];
+      window.applySponsor(_activeSponsor);
+      // Rotate sponsors every 5 minutes if multiple
+      if (data.length > 1) {
+        let idx = 0;
+        setInterval(() => {
+          idx = (idx + 1) % data.length;
+          _activeSponsor = data[idx];
+          window.applySponsor(_activeSponsor);
+        }, 300000);
+      }
+    } catch (e) { console.warn('[sponsors] load failed:', e); }
+  };
+
+  window.applySponsor = function (s) {
+    if (!s) return;
+    document.documentElement.style.setProperty('--sponsor-color', s.color || '#76b82a');
+    document.documentElement.style.setProperty('--c-primary', s.color || '#76b82a');
+    // Update sponsor banner if it exists
+    const banner = document.getElementById('sponsor-banner');
+    if (banner) {
+      banner.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;
+                    background:${s.color}18;border-bottom:1px solid ${s.color}33;">
+          ${s.logo_url ? `<img src="${s.logo_url}" style="height:24px;object-fit:contain;">` : ''}
+          <span style="font-size:.68rem;font-weight:700;color:${s.color};">
+            ${s.show_label || 'Powered by'} ${s.name}
+          </span>
+          ${s.cta_url ? `<a href="${s.cta_url}" target="_blank"
+            style="margin-left:auto;font-size:.6rem;padding:4px 10px;border-radius:20px;
+                   background:${s.color};color:#fff;text-decoration:none;font-weight:700;">
+            ${s.cta_text || 'Learn More'}
+          </a>` : ''}
+        </div>`;
+      banner.style.display = 'block';
+    }
+    showToast(`Powered by ${s.name}`, 'verified');
+  };
+
+  window.setSponsor = function () { if (window.loadSponsors) loadSponsors(); };
+
+  window.loadSponsors = async function () {
+    if (!window._sb) return;
+    try {
+      const now = new Date().toISOString();
+      const { data } = await window._sb.from('sponsors').select('*').eq('active', true).order('priority', { ascending: false });
+      const active = (data || []).filter(s => (!s.start_date || s.start_date <= now) && (!s.end_date || s.end_date >= now));
+      if (!active.length) { window._revertSponsor(); return; }
+      window._applySponsor(active[0]);
+      if (active.length > 1) { let i = 0; setInterval(() => { i = (i + 1) % active.length; window._applySponsor(active[i]); }, 300000); }
+    } catch (e) { console.warn('[sponsors]', e); }
+  };
+
+  window._applySponsor = function (s) {
+    document.documentElement.style.setProperty('--c-primary', s.color || '#e84118');
+    const b = document.getElementById('sponsor-banner');
+    if (b) { b.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;background:${s.color}18;border-bottom:1px solid ${s.color}33;"><span style="font-size:.68rem;font-weight:700;color:${s.color};">${s.show_label || 'Powered by'} ${s.name}</span>${s.cta_url ? `<a href="${s.cta_url}" target="_blank" style="margin-left:auto;font-size:.6rem;padding:4px 10px;border-radius:20px;background:${s.color};color:#fff;text-decoration:none;font-weight:700;">${s.cta_text || 'Learn More'}</a>` : ''}</div>`; b.style.display = 'block'; }
+    showToast(`Powered by ${s.name}`, 'verified');
+  };
+
+  window._revertSponsor = function () {
+    document.documentElement.style.setProperty('--c-primary', '#e84118');
+    const b = document.getElementById('sponsor-banner'); if (b) { b.innerHTML = ''; b.style.display = 'none'; }
   };
 
   // ══════════════════════════════════════════════════════════════
@@ -495,14 +585,12 @@
   async function syncStatistics() {
     if (!window._sb) return;
     try {
-      // A. Register / heartbeat this session (only for logged-in users)
-      if (window._currentUser?.id) {
-        await window._sb.from('online_users').upsert({
-          id: window._currentUser.id,
-          user_id: window._currentUser.id,
-          last_seen: new Date().toISOString()
-        }, { onConflict: 'id' });
-      }
+      // A. Register / heartbeat this session
+      await window._sb.from('online_users').upsert({
+        id: _sessionUid,
+        user_id: _sessionUid,
+        last_seen: new Date().toISOString()
+      }, { onConflict: 'id' });
 
       // B. Fetch live listener count from show_stats
       // B. Push real stream count to show_stats, then read back
@@ -806,7 +894,7 @@
     const ml = document.getElementById('profile-member-label');
     if (ml) ml.textContent = window._profile ? 'Cloud synced · Pulse Points Member' : 'Local listener · points saved on this device';
 
-    ['points-display', 'profile-pts-num'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = f; });
+    ['points-display', 'points-display-rwd', 'profile-pts-num'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = f; });
     const pp = document.getElementById('profile-pts'); if (pp) pp.textContent = f + ' pts';
     const lb = document.getElementById('lb-your-pts'); if (lb) lb.textContent = f + ' pts';
     const ps = document.getElementById('profile-streak'); if (ps) ps.textContent = streak;
@@ -1134,6 +1222,7 @@
         setInterval(syncStatistics, 15000);
         if (typeof loadAnalytics === 'function') loadAnalytics();
         if (window.loadScheduleFromSupabase) loadScheduleFromSupabase();
+        if (window.loadSponsors) loadSponsors();
       } else {
         setTimeout(startEngine, 500);
       }
@@ -1142,3 +1231,186 @@
   });
 
 })();
+
+// ═══════════════════════════════════════════════════════════════
+//  📞 CALL-IN FEATURE
+// ═══════════════════════════════════════════════════════════════
+window.openCallIn = function () {
+  const phone = window.APP_CONFIG?.CALL_IN_NUMBER || window.APP_CONFIG?.WHATSAPP || '+254715505284';
+  const modal = document.createElement('div');
+  modal.id = 'callin-modal';
+  modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;
+    display:flex;align-items:center;justify-content:center;padding:20px;`;
+  modal.innerHTML = `
+    <div style="background:var(--c-surface);border-radius:20px;padding:28px 24px;
+                max-width:360px;width:100%;text-align:center;position:relative;">
+      <button onclick="document.getElementById('callin-modal').remove()"
+        style="position:absolute;top:12px;right:14px;background:none;border:none;
+               color:var(--c-on-surface-variant);font-size:1.2rem;cursor:pointer;">✕</button>
+      <p style="font-size:2rem;margin-bottom:8px;">📞</p>
+      <h3 style="font-family:var(--font-display);font-size:1.4rem;font-weight:800;margin-bottom:6px;">Call In Live</h3>
+      <p style="font-size:.8rem;color:var(--c-on-surface-variant);margin-bottom:20px;">
+        Join the conversation on air — call us directly or send a WhatsApp message!
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <a href="tel:${phone}"
+          style="display:flex;align-items:center;justify-content:center;gap:10px;
+                 padding:14px;border-radius:12px;background:var(--c-primary);
+                 color:#fff;text-decoration:none;font-weight:800;font-size:.9rem;">
+          <span class="material-symbols-outlined" style="font-size:1.1rem;">call</span>
+          Call ${phone}
+        </a>
+        <a href="https://wa.me/${phone.replace(/\+/g, '').replace(/\s/g, '')}"
+          target="_blank"
+          style="display:flex;align-items:center;justify-content:center;gap:10px;
+                 padding:14px;border-radius:12px;background:#25D366;
+                 color:#fff;text-decoration:none;font-weight:800;font-size:.9rem;">
+          <span class="material-symbols-outlined" style="font-size:1.1rem;">chat</span>
+          WhatsApp Us
+        </a>
+      </div>
+      <p style="font-size:.65rem;color:var(--c-on-surface-variant);margin-top:14px;">
+        Lines open during live shows · Standard rates apply
+      </p>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  💬 CONTACT US FEATURE
+// ═══════════════════════════════════════════════════════════════
+window.openContactUs = function () {
+  const phone = window.APP_CONFIG?.WHATSAPP || '+254715505284';
+  const email = window.APP_CONFIG?.CONTACT_EMAIL || 'info@amaicamedia.com';
+  const modal = document.createElement('div');
+  modal.id = 'contact-modal';
+  modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;
+    display:flex;align-items:flex-end;justify-content:center;`;
+  modal.innerHTML = `
+    <div style="background:var(--c-surface);border-radius:20px 20px 0 0;padding:28px 24px 40px;
+                max-width:480px;width:100%;position:relative;">
+      <button onclick="document.getElementById('contact-modal').remove()"
+        style="position:absolute;top:12px;right:14px;background:none;border:none;
+               color:var(--c-on-surface-variant);font-size:1.2rem;cursor:pointer;">✕</button>
+      <p style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--c-on-surface-variant);margin-bottom:4px;">Support</p>
+      <h3 style="font-family:var(--font-display);font-size:1.4rem;font-weight:800;margin-bottom:16px;">Contact Us</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+        <a href="https://wa.me/${phone.replace(/\+/g, '').replace(/\s/g, '')}" target="_blank"
+          style="display:flex;align-items:center;gap:14px;padding:14px;border-radius:12px;
+                 background:var(--c-surface-high);text-decoration:none;color:var(--c-on-surface);">
+          <span style="font-size:1.5rem;">💬</span>
+          <div><p style="font-weight:700;font-size:.88rem;">WhatsApp Chat</p>
+          <p style="font-size:.72rem;color:var(--c-on-surface-variant);">Quick replies · Usually within minutes</p></div>
+        </a>
+        <a href="mailto:${email}"
+          style="display:flex;align-items:center;gap:14px;padding:14px;border-radius:12px;
+                 background:var(--c-surface-high);text-decoration:none;color:var(--c-on-surface);">
+          <span style="font-size:1.5rem;">📧</span>
+          <div><p style="font-weight:700;font-size:.88rem;">Email Us</p>
+          <p style="font-size:.72rem;color:var(--c-on-surface-variant);">${email}</p></div>
+        </a>
+        <a href="tel:${phone}"
+          style="display:flex;align-items:center;gap:14px;padding:14px;border-radius:12px;
+                 background:var(--c-surface-high);text-decoration:none;color:var(--c-on-surface);">
+          <span style="font-size:1.5rem;">📞</span>
+          <div><p style="font-weight:700;font-size:.88rem;">Call Us</p>
+          <p style="font-size:.72rem;color:var(--c-on-surface-variant);">${phone}</p></div>
+        </a>
+      </div>
+      <!-- In-app message form -->
+      <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
+                color:var(--c-on-surface-variant);margin-bottom:8px;">Send a Message</p>
+      <textarea id="contact-msg" placeholder="Type your message here…" rows="3"
+        style="width:100%;background:var(--c-surface-high);border:1px solid var(--c-outline);
+               border-radius:10px;padding:12px;color:var(--c-on-surface);font-size:.85rem;
+               outline:none;resize:none;margin-bottom:10px;"></textarea>
+      <button onclick="submitContactMessage()"
+        style="width:100%;padding:14px;border-radius:12px;background:var(--c-primary);
+               color:#fff;font-weight:800;font-size:.9rem;border:none;cursor:pointer;">
+        Send Message
+      </button>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+};
+
+window.submitContactMessage = async function () {
+  const msg = document.getElementById('contact-msg')?.value?.trim();
+  if (!msg) { alert('Please type a message first'); return; }
+  if (window._sb) {
+    await window._sb.from('contact_messages').insert({
+      user_id: window._currentUser?.id || null,
+      username: window._profile?.username || 'Guest',
+      message: msg,
+      status: 'unread',
+      created_at: new Date()
+    });
+  }
+  document.getElementById('contact-modal')?.remove();
+  if (window.showToast) showToast('Message sent! We\'ll get back to you soon.', 'check_circle');
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  🔗 FOOTER — LEGAL & SOCIAL LINKS
+// ═══════════════════════════════════════════════════════════════
+window.renderAppFooter = function () {
+  const existing = document.getElementById('app-footer');
+  if (existing) return;
+  const footer = document.createElement('div');
+  footer.id = 'app-footer';
+  const socials = window.APP_CONFIG?.SOCIALS || {};
+  const socialLinks = [
+    { key: 'facebook', icon: 'f', label: 'Facebook', color: '#1877F2' },
+    { key: 'twitter', icon: '𝕏', label: 'Twitter', color: '#000' },
+    { key: 'instagram', icon: '◎', label: 'Instagram', color: '#E1306C' },
+    { key: 'youtube', icon: '▶', label: 'YouTube', color: '#FF0000' },
+    { key: 'tiktok', icon: '♪', label: 'TikTok', color: '#010101' },
+  ].filter(s => socials[s.key]);
+
+  footer.innerHTML = `
+    <div style="padding:32px 20px 60px;max-width:600px;margin:0 auto;">
+      <hr style="border:none;border-top:1px solid var(--c-outline);margin-bottom:24px;">
+
+      <!-- Social Links -->
+      ${socialLinks.length > 0 ? `
+      <p style="font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;
+                color:var(--c-on-surface-variant);margin-bottom:12px;">Find Us</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;">
+        ${socialLinks.map(s => `
+          <a href="${socials[s.key]}" target="_blank"
+            style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;
+                   background:var(--c-surface-high);color:var(--c-on-surface);text-decoration:none;
+                   font-size:.75rem;font-weight:600;">
+            <span style="color:${s.color};font-weight:900;">${s.icon}</span> ${s.label}
+          </a>`).join('')}
+      </div>` : ''}
+
+      <!-- Legal Links -->
+      <p style="font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;
+                color:var(--c-on-surface-variant);margin-bottom:12px;">Legal</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:24px;">
+        ${[
+      ['Terms of Service', 'terms'],
+      ['Privacy Policy', 'privacy'],
+      ['Service Level Agreement', 'sla'],
+      ['Acceptable Use Policy', 'aup'],
+      ['Marketplace Terms', 'marketplace-terms'],
+    ].map(([label, slug]) => `
+          <a href="${window.APP_CONFIG?.LEGAL_BASE_URL || '#'}/${slug}"
+            style="font-size:.72rem;color:var(--c-on-surface-variant);text-decoration:none;
+                   padding:4px 0;border-bottom:1px solid transparent;"
+            onmouseover="this.style.borderBottomColor='var(--c-primary)'"
+            onmouseout="this.style.borderBottomColor='transparent'">
+            ${label}
+          </a>`).join('<span style="color:var(--c-outline);font-size:.6rem;">·</span>')}
+      </div>
+
+      <!-- Bottom -->
+      <p style="font-size:.65rem;color:var(--c-on-surface-variant);text-align:center;">
+        © ${new Date().getFullYear()} Amaica Media · 98.7 FM Kakamega, Kenya
+      </p>
+    </div>`;
+  document.body.appendChild(footer);
+};

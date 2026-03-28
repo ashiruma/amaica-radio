@@ -55,34 +55,34 @@
 [data-theme="cyan"] {
   /* ── Forest Green Dark Theme ── */
   --brand-green-forest: #0d2618;
-  --brand-green-leaf:   #4ade80;
-  --c-fire:             #4ade80;
-  --c-ember:            #86efac;
-  --amaica-charcoal:    #050a07;
-  --fire-gold:          #86efac;
-  --stone-glow:         rgba(74, 222, 128, 0.15);
-  --fire-glow:          rgba(74, 222, 128, 0.15);
-  --c-primary:          #4ade80;
-  --c-primary-dim:      #22c55e;
-  --c-on-primary:       #052e16;
-  --c-tertiary:         #86efac;
-  --c-tertiary-dim:     #4ade80;
-  --c-live:             #4ade80;
-  --c-error:            #f87171;
-  --c-accent-glow:      rgba(74, 222, 128, 0.3);
-  --c-accent-glow-sm:   rgba(74, 222, 128, 0.15);
-  --c-surface:          #050a07;
-  --c-surface-low:      #091409;
-  --c-surface-container:#0f1f11;
-  --c-surface-high:     #162616;
-  --c-surface-highest:  #1e321e;
-  --c-surface-bright:   #243b24;
-  --c-glass:            rgba(74, 222, 128, 0.04);
-  --c-on-surface:       #e8f5e9;
+  --brand-green-leaf: #4ade80;
+  --c-fire: #4ade80;
+  --c-ember: #86efac;
+  --amaica-charcoal: #050a07;
+  --fire-gold: #86efac;
+  --stone-glow: rgba(74, 222, 128, 0.15);
+  --fire-glow: rgba(74, 222, 128, 0.15);
+  --c-primary: #4ade80;
+  --c-primary-dim: #22c55e;
+  --c-on-primary: #052e16;
+  --c-tertiary: #86efac;
+  --c-tertiary-dim: #4ade80;
+  --c-live: #4ade80;
+  --c-error: #f87171;
+  --c-accent-glow: rgba(74, 222, 128, 0.3);
+  --c-accent-glow-sm: rgba(74, 222, 128, 0.15);
+  --c-surface: #050a07;
+  --c-surface-low: #091409;
+  --c-surface-container: #0f1f11;
+  --c-surface-high: #162616;
+  --c-surface-highest: #1e321e;
+  --c-surface-bright: #243b24;
+  --c-glass: rgba(74, 222, 128, 0.04);
+  --c-on-surface: #e8f5e9;
   --c-on-surface-variant: rgba(232, 245, 233, 0.5);
-  --c-outline:          rgba(74, 222, 128, 0.15);
-  --bg-gradient:        radial-gradient(circle at 50% 30%, var(--fire-glow), var(--amaica-charcoal) 70%);
-  --sponsor-color:      #4ade80;
+  --c-outline: rgba(74, 222, 128, 0.15);
+  --bg-gradient: radial-gradient(circle at 50% 30%, var(--fire-glow), var(--amaica-charcoal) 70%);
+  --sponsor-color: #4ade80;
 }
 
 /* ── RESET ──────────────────────────────────────────────────── */
@@ -143,7 +143,7 @@ button {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 100;
+  z-index: 9998;
   height: var(--nav-h);
   display: flex;
   align-items: center;
@@ -3269,14 +3269,14 @@ button {
 
 /* ── EMBER PARTICLES ────────────────────────────────────────── */
 .ember {
-  position: absolute;
+  position: fixed;
   width: 2px;
   height: 2px;
   background: var(--fire-gold);
   border-radius: 50%;
   pointer-events: none;
   opacity: 0;
-  z-index: 0;
+  z-index: 9998;
 }
 
 @keyframes float-up {

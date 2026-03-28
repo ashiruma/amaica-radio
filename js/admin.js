@@ -307,7 +307,44 @@
             <button class="btn-primary" onclick="adminChangePin()" style="padding:8px 14px;">Save</button>
           </div>
         </div>
+
+        <!-- SPONSOR MANAGER (superuser) -->
+        <div class="auth-card" style="margin-bottom:20px;">
+          <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);margin-bottom:10px;">🏢 Sponsor Manager</p>
+          <div id="admin-sponsor-list" style="margin-bottom:12px;"></div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;gap:8px;">
+              <input id="adm-sp-name"  type="text" placeholder="Sponsor name"
+                style="flex:1;background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+              <input id="adm-sp-color" type="color" value="#76b82a"
+                style="width:44px;height:36px;border:1px solid var(--c-outline);border-radius:6px;cursor:pointer;background:none;padding:2px;"/>
+            </div>
+            <input id="adm-sp-label" type="text" placeholder="Show label (e.g. Powered by KCB)"
+              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+            <input id="adm-sp-logo"  type="text" placeholder="Logo URL (optional)"
+              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+            <input id="adm-sp-cta-url"  type="text" placeholder="CTA URL (optional)"
+              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+            <input id="adm-sp-cta-text" type="text" placeholder="CTA Button text (e.g. Visit Us)"
+              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+            <div style="display:flex;gap:8px;">
+              <input id="adm-sp-start" type="date"
+                style="flex:1;background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+              <input id="adm-sp-end"   type="date"
+                style="flex:1;background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+            </div>
+            <input id="adm-sp-priority" type="number" placeholder="Priority (higher = shown first)"
+              style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+            <button class="btn-primary" onclick="adminAddSponsor()" style="justify-content:center;">+ Add Sponsor</button>
+          </div>
+        </div>
         ` : ''}
+
+        <!-- CONTACT MESSAGES (all staff) -->
+        <div class="auth-card" style="margin-bottom:20px;">
+          <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);margin-bottom:10px;">💬 Contact Messages</p>
+          <div id="admin-contact-list"></div>
+        </div>
 
       </div>`;
 
@@ -315,10 +352,12 @@
     renderAdminFeedEditor();
     renderAdminRewardsEditor();
     renderAdminMarketEditor();
+    renderAdminContactMessages();
     if (isSuperuser) {
       renderAdminStats();
       renderStaffList();
       renderScheduleList();
+      renderAdminSponsorList();
       window.initAdminDashboard?.();
     }
   }
@@ -638,7 +677,7 @@
     if (!display || !code) return;
     display.innerHTML = `<p style="text-align:center;opacity:0.5;padding:20px 0;">Searching…</p>`;
     if (!window._sb) { display.innerHTML = `<p style="color:var(--c-error);text-align:center;">Backend not connected</p>`; return; }
-    const { data, error } = await window._sb.from('redemptions').select('*').eq('code', code).single();
+    const { data, error } = await window._sb.from('redemptions').select('*, profiles(username)').eq('code', code).single();
     if (error || !data) {
       display.innerHTML = `<div style="text-align:center;padding:20px 0;"><p style="font-size:1.8rem;">⚠️</p><p style="opacity:0.5;">Code not found.</p></div>`; return;
     }
@@ -647,7 +686,7 @@
       <div style="text-align:center;">
         <p style="font-weight:800;font-size:.9rem;color:${isClaimed ? 'var(--c-error)' : 'var(--c-primary)'};">${isClaimed ? 'Already Collected' : 'Verification Success'}</p>
         <h3 style="font-family:var(--font-display);font-size:1.3rem;font-weight:800;margin:8px 0 4px;">${data.item_name}</h3>
-        <p style="opacity:0.6;font-size:.85rem;">Code: <strong>${data.code}</strong> · Type: <strong>${data.item_type || '—'}</strong></p>
+        <p style="opacity:0.6;font-size:.85rem;">Listener: <strong>${data.profiles?.username || 'Guest'}</strong></p>
         ${!isClaimed ? `<button onclick="confirmCollection('${data.id}')" class="btn-primary" style="margin-top:16px;width:100%;justify-content:center;">MARK AS HANDED OVER</button>`
         : `<p style="margin-top:12px;font-size:.72rem;opacity:.35;">Collected ${new Date(data.updated_at).toLocaleDateString()}</p>`}
       </div>`;
@@ -764,3 +803,101 @@
   function _setPeak(c) { const el = document.getElementById('adm-peak-count'); if (el) el.textContent = Number(c).toLocaleString(); }
   function _setStatus(c) { const el = document.getElementById('adm-live-status'); if (!el) return; el.textContent = c > 0 ? '🔴 LIVE' : '⚫ OFFLINE'; el.style.color = c > 0 ? 'var(--c-primary)' : 'var(--c-on-surface-variant)'; }
 })();
+// ── SPONSOR MANAGER ───────────────────────────────────────────
+async function renderAdminSponsorList() {
+  const el = document.getElementById('admin-sponsor-list');
+  if (!el || !window._sb) return;
+  const { data } = await window._sb.from('sponsors').select('*').order('priority', { ascending: false });
+  if (!data || data.length === 0) {
+    el.innerHTML = '<p style="font-size:.72rem;opacity:.5;">No sponsors yet.</p>'; return;
+  }
+  el.innerHTML = data.map(s => `
+    <div class="adm-row">
+      <div class="adm-row-info" style="display:flex;align-items:center;gap:8px;">
+        <span style="width:12px;height:12px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+        <strong>${s.name}</strong>
+        <span class="adm-tag" style="${s.active ? 'background:rgba(76,184,42,.15);color:#4cb82a;' : 'opacity:.5;'}">${s.active ? 'Active' : 'Inactive'}</span>
+        <p style="font-size:.68rem;color:var(--c-on-surface-variant);">${s.show_label || ''} · Priority: ${s.priority || 0}</p>
+      </div>
+      <div class="adm-row-actions">
+        <button class="adm-btn-edit" onclick="adminToggleSponsor('${s.id}',${!s.active})">${s.active ? 'Pause' : 'Activate'}</button>
+        <button class="adm-btn-del"  onclick="adminDeleteSponsor('${s.id}')">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+window.adminAddSponsor = async function () {
+  const name = document.getElementById('adm-sp-name')?.value?.trim();
+  const color = document.getElementById('adm-sp-color')?.value || '#76b82a';
+  const label = document.getElementById('adm-sp-label')?.value?.trim();
+  const logo_url = document.getElementById('adm-sp-logo')?.value?.trim() || null;
+  const cta_url = document.getElementById('adm-sp-cta-url')?.value?.trim() || null;
+  const cta_text = document.getElementById('adm-sp-cta-text')?.value?.trim() || null;
+  const start = document.getElementById('adm-sp-start')?.value;
+  const end = document.getElementById('adm-sp-end')?.value;
+  const priority = parseInt(document.getElementById('adm-sp-priority')?.value) || 0;
+  if (!name || !start || !end) { alert('Name, start and end date required'); return; }
+  if (!window._sb) return;
+  const { error } = await window._sb.from('sponsors').insert({
+    name, color, show_label: label, logo_url, cta_url, cta_text,
+    start_date: new Date(start).toISOString(),
+    end_date: new Date(end).toISOString(),
+    priority, active: true
+  });
+  if (error) { alert('Error: ' + error.message); return; }
+  ['adm-sp-name', 'adm-sp-label', 'adm-sp-logo', 'adm-sp-cta-url', 'adm-sp-cta-text', 'adm-sp-priority'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.value = '';
+  });
+  renderAdminSponsorList();
+  if (window.loadSponsors) loadSponsors();
+  if (window.showToast) showToast('Sponsor added ✓', 'check_circle');
+};
+
+window.adminToggleSponsor = async function (id, active) {
+  await window._sb.from('sponsors').update({ active }).eq('id', id);
+  renderAdminSponsorList();
+  if (window.loadSponsors) loadSponsors();
+  if (window.showToast) showToast(active ? 'Sponsor activated ✓' : 'Sponsor paused', 'check_circle');
+};
+
+window.adminDeleteSponsor = async function (id) {
+  if (!confirm('Remove this sponsor?')) return;
+  await window._sb.from('sponsors').delete().eq('id', id);
+  renderAdminSponsorList();
+  if (window.showToast) showToast('Sponsor removed', 'check_circle');
+};
+
+// ── CONTACT MESSAGES ──────────────────────────────────────────
+async function renderAdminContactMessages() {
+  const el = document.getElementById('admin-contact-list');
+  if (!el || !window._sb) return;
+  const { data } = await window._sb.from('contact_messages')
+    .select('*').order('created_at', { ascending: false }).limit(20);
+  if (!data || data.length === 0) {
+    el.innerHTML = '<p style="font-size:.72rem;opacity:.5;">No messages yet.</p>'; return;
+  }
+  el.innerHTML = data.map(m => `
+    <div class="adm-row" style="${m.status === 'unread' ? 'border-left:3px solid var(--c-primary);' : ''}">
+      <div class="adm-row-info">
+        <strong>${m.username || 'Guest'}</strong>
+        <span class="adm-tag" style="margin-left:6px;${m.status === 'unread' ? 'background:rgba(232,65,24,.15);color:var(--c-primary);' : ''}">${m.status}</span>
+        <p style="font-size:.78rem;margin-top:4px;">${m.message}</p>
+        <p style="font-size:.62rem;color:var(--c-on-surface-variant);margin-top:2px;">${new Date(m.created_at).toLocaleString()}</p>
+      </div>
+      <div class="adm-row-actions">
+        ${m.status === 'unread' ? `<button class="adm-btn-edit" onclick="adminMarkMessageRead('${m.id}')">Mark Read</button>` : ''}
+        <button class="adm-btn-del" onclick="adminDeleteMessage('${m.id}')">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+window.adminMarkMessageRead = async function (id) {
+  await window._sb.from('contact_messages').update({ status: 'read' }).eq('id', id);
+  renderAdminContactMessages();
+};
+
+window.adminDeleteMessage = async function (id) {
+  if (!confirm('Delete this message?')) return;
+  await window._sb.from('contact_messages').delete().eq('id', id);
+  renderAdminContactMessages();
+};
