@@ -1,0 +1,14 @@
+#adminDashboard {
+  padding: 20px;
+  background: #111;
+  color: #fff;
+  border-radius: 12px;
+  width: 300px;
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  margin: 10px 0;
+  font-size: 18px;
+}

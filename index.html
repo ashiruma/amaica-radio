@@ -3,682 +3,70 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<meta name="theme-color" content="#0e0e0e"/>
+<meta name="theme-color" content="#050505"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<title>Amaica Media — The Pulse</title>
+<title>Amaica Media — The Pulse v7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link rel="stylesheet" href="css/app.css"/>
+<!-- Chart.js and Leaflet for admin dashboard -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- ═══════════════════════════════════════════════
-     SUPABASE + AUTH + POINTS BACKEND
-═══════════════════════════════════════════════ -->
+<!-- JS modules loaded in dependency order -->
+<script src="js/config.js"></script>
+<script src="js/admin.js" defer></script>
 <script type="module">
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-const SUPABASE_URL  = 'https://dmscfpnkswmfbfgcuwwb.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtc2NmcG5rc3dtZmJmZ2N1d3diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxOTYzMTYsImV4cCI6MjA4OTc3MjMxNn0.iRIYW_OiFAYjha-PoXQHf7gjwbhSfhGWdtyD_3ZgAOs';
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
-window._sb = sb;
-
-window.sbSignUp = async (email, password, username) => {
-  const { data, error } = await sb.auth.signUp({ email, password, options: { data: { username } } });
-  if (error) throw error;
-  await sb.from('profiles').insert({ id: data.user.id, username, points: 0, streak: 0, tier: 'bronze', messages_sent: 0, referral_code: 'PULSE-' + Math.random().toString(36).slice(2,6).toUpperCase(), referrals_made: 0 });
-  return data;
-};
-window.sbSignIn = async (email, password) => {
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  return data;
-};
-window.sbSignOut = async () => {
-  await sb.auth.signOut();
-  window._currentUser = null; window._profile = null; renderAuthState();
-};
-sb.auth.onAuthStateChange(async (event, session) => {
-  if (session?.user) { window._currentUser = session.user; await loadProfile(session.user.id); }
-  else { window._currentUser = null; window._profile = null; }
-  renderAuthState();
-});
-async function loadProfile(uid) {
-  const { data } = await sb.from('profiles').select('*').eq('id', uid).single();
-  if (data) { window._profile = data; syncProfileToUI(data); }
-}
-window.syncProfileToUI = (p) => {
-  if (!p) return;
-  const f = p.points.toLocaleString();
-  ['points-display','profile-pts-num'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = f; });
-  const pp = document.getElementById('profile-pts'); if (pp) pp.textContent = f + ' pts';
-  const lb = document.getElementById('lb-your-pts'); if (lb) lb.textContent = f + ' pts';
-  const pn = document.getElementById('profile-username'); if (pn) pn.textContent = p.username || 'Listener';
-  const rc = document.getElementById('referral-code-display'); if (rc) rc.textContent = p.referral_code || 'PULSE-XXXX';
-  const pc = document.getElementById('profile-chat'); if (pc) pc.textContent = p.messages_sent || 0;
-  const str = document.getElementById('profile-streak'); if (str) str.textContent = (p.streak || 0);
-  setTierUI(p.tier || 'bronze', p.points || 0);
-};
-window.sbEarnPoints = async (pts, reason) => {
-  if (!window._currentUser) { window._localPoints = (window._localPoints || 0) + pts; saveLocal(); updateLocalUI(); showPtsPop(pts); return; }
-  const uid = window._currentUser.id;
-  const newPts = (window._profile?.points || 0) + pts;
-  const { data } = await sb.from('profiles').update({ points: newPts }).eq('id', uid).select().single();
-  if (data) { window._profile = data; syncProfileToUI(data); }
-  await sb.from('point_events').insert({ user_id: uid, points: pts, reason, created_at: new Date().toISOString() });
-  showPtsPop(pts);
-};
-let _sessionStart = null;
-window.startListenSession = async () => {
-  _sessionStart = Date.now();
-  if (!window._currentUser) return;
-  const today = new Date().toDateString(); const p = window._profile;
-  if (p && p.last_listen_date !== today) {
-    const isConsec = p.last_listen_date === new Date(Date.now() - 86400000).toDateString();
-    const newStreak = isConsec ? (p.streak || 0) + 1 : 1;
-    await sb.from('profiles').update({ streak: newStreak, last_listen_date: today }).eq('id', window._currentUser.id);
-    window._profile.streak = newStreak; window._profile.last_listen_date = today;
-    const se = document.getElementById('profile-streak'); if (se) se.textContent = newStreak;
-  }
-};
-window.endListenSession = async () => {
-  if (!_sessionStart || !window._currentUser) return;
-  const mins = Math.floor((Date.now() - _sessionStart) / 60000);
-  if (mins < 1) return;
-  await sb.from('listen_sessions').insert({ user_id: window._currentUser.id, duration_mins: mins, created_at: new Date().toISOString() });
-  _sessionStart = null;
-};
-window.sbSendMessage = async (text, type = 'chat') => {
-  if (!window._currentUser) return;
-  const uid = window._currentUser.id;
-  await sb.from('messages').insert({ user_id: uid, username: window._profile?.username || 'Listener', text: type === 'shoutout' ? `📣 SHOUTOUT: ${text}` : text, created_at: new Date().toISOString() });
-  const newCount = (window._profile?.messages_sent || 0) + 1;
-  await sb.from('profiles').update({ messages_sent: newCount }).eq('id', uid);
-  if (window._profile) window._profile.messages_sent = newCount;
-};
-const chatChannel = sb.channel('live-chat')
-  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-    const m = payload.new; if (m.user_id === window._currentUser?.id) return;
-    appendChatMsg({ u: m.username, text: m.text, own: false, time: new Date(m.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}), pts: true });
-    // Show live shoutout toast for shoutout messages
-    if (m.text.includes('📣 SHOUTOUT')) {
-      window.showLiveShoutout(m.username, m.text.replace('📣 SHOUTOUT:', '').trim());
-    }
-  }).subscribe();
-window.loadLeaderboard = async () => {
-  const { data } = await sb.from('profiles').select('username, points, streak, tier').order('points', { ascending: false }).limit(20);
-  if (data) renderLeaderboard(data);
-};
-window.applyReferralCode = async (code) => {
-  if (!window._currentUser) return;
-  const { data: referrer } = await sb.from('profiles').select('id, referrals_made, points').eq('referral_code', code.toUpperCase()).single();
-  if (!referrer) { showToast('Code not found', 'error'); return; }
-  if (referrer.id === window._currentUser.id) { showToast('Cannot use own code', 'error'); return; }
-  await sb.from('profiles').update({ points: referrer.points + 200, referrals_made: referrer.referrals_made + 1 }).eq('id', referrer.id);
-  await sb.from('point_events').insert({ user_id: referrer.id, points: 200, reason: 'Referral bonus' });
-  await window.sbEarnPoints(50, 'Used referral code');
-  showToast('+50 pts for using a referral!', 'celebration');
-};
-function setTierUI(tier, pts) {
-  const tiers = { bronze: 0, silver: 500, gold: 2000, superfan: 5000 };
-  const order = ['bronze','silver','gold','superfan'];
-  const idx = order.indexOf(tier); const next = order[idx + 1]; const nextPts = next ? tiers[next] : null;
-  const el = document.getElementById('tier-next-label');
-  if (el && nextPts) el.textContent = `Next: ${next.charAt(0).toUpperCase()+next.slice(1)} at ${nextPts.toLocaleString()} pts`;
-  const bar = document.getElementById('tier-progress-bar');
-  if (bar && nextPts) { const prev = tiers[tier]; bar.style.width = Math.min(100, ((pts - prev) / (nextPts - prev)) * 100) + '%'; }
-  document.querySelectorAll('.tier-badge').forEach(b => b.classList.toggle('active', b.dataset.tier === tier));
-}
-window.renderAuthState = () => {
-  const loggedIn = !!window._currentUser;
-  const authSec = document.getElementById('auth-section'); const profileSec = document.getElementById('profile-logged-in');
-  if (authSec) authSec.style.display = loggedIn ? 'none' : 'block';
-  if (profileSec) profileSec.style.display = loggedIn ? 'block' : 'none';
-  if (loggedIn && window._profile) syncProfileToUI(window._profile);
-  syncLocalProfileUI();
-};
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+  const SUPABASE_URL  = 'https://dmscfpnkswmfbfgcuwwb.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtc2NmcG5rc3dtZmJmZ2N1d3diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxOTYzMTYsImV4cCI6MjA4OTc3MjMxNn0.iRIYW_OiFAYjha-PoXQHf7gjwbhSfhGWdtyD_3ZgAOs';
+  window._sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 </script>
-
-<style>
-:root, [data-theme="ember"] {
-  /* Amaica Brand */
-  --brand-green-forest:#1b3d2f; --brand-green-leaf:#76b82a;
-  --brand-accent:#76b82a; --brand-accent-dim:#5a8d20;
-  --fire-glow:rgba(232,65,24,0.15);
-  /* Primary */
-  --c-primary:#76b82a; --c-primary-dim:#5a8d20; --c-on-primary:#ffffff;
-  /* Tertiary */
-  --c-tertiary:#76b82a; --c-tertiary-dim:#5a8d20;
-  /* Surfaces */
-  --c-surface:#060a09; --c-surface-low:#0e1613; --c-surface-container:#14211d;
-  --c-surface-high:#192b24; --c-surface-highest:#1d2e29; --c-surface-bright:#253d33;
-  /* Text */
-  --c-on-surface:#f0f5f3; --c-on-surface-variant:#7a9e8a; --c-outline:#2a3d34;
-  /* States */
-  --c-live:#76b82a; --c-error:#ff5c5c;
-  --c-accent-glow:rgba(118,184,42,0.3); --c-accent-glow-sm:rgba(118,184,42,0.15);
-  /* Background gradient */
-  --bg-gradient: radial-gradient(circle at 90% 10%,var(--fire-glow),transparent 40%),
-                 linear-gradient(180deg,#060a09 0%,#1b3d2f 100%);
-  /* Typography & Layout */
-  --font-display:'Plus Jakarta Sans',sans-serif; --font-body:'Inter',sans-serif;
-  --radius-sm:.25rem; --radius-md:.5rem; --radius-lg:1rem; --radius-xl:1.5rem; --radius-full:9999px;
-  --tr:.2s cubic-bezier(.4,0,.2,1); --nav-h:56px; --player-h:72px;
-}
-[data-theme="cyan"] {
-  /* Amaica Native (Light) */
-  --brand-green-forest:#1b3d2f; --brand-green-leaf:#5a8d20;
-  --fire-glow:rgba(255,149,0,0.1);
-  --c-primary:#1b3d2f; --c-primary-dim:#122920; --c-on-primary:#ffffff;
-  --c-tertiary:#5a8d20; --c-tertiary-dim:#3d6015;
-  --c-surface:#f8faf9; --c-surface-low:#ffffff; --c-surface-container:#ebf0ee;
-  --c-surface-high:#e2eae6; --c-surface-highest:#dfe6e3; --c-surface-bright:#d5e0db;
-  --c-on-surface:#1b3d2f; --c-on-surface-variant:#5c7a6e; --c-outline:#ceded7;
-  --c-live:#5a8d20; --c-error:#cc3333;
-  --c-accent-glow:rgba(27,61,47,0.1); --c-accent-glow-sm:rgba(27,61,47,0.06);
-  --bg-gradient: radial-gradient(circle at 10% 10%,var(--fire-glow),transparent 30%),
-                 linear-gradient(180deg,#f8faf9 0%,#e8f0ed 100%);
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html{scroll-behavior:smooth;}
-body{background:var(--c-surface);color:var(--c-on-surface);font-family:var(--font-body);font-size:16px;line-height:1.5;min-height:100dvh;overflow-x:hidden;-webkit-font-smoothing:antialiased;}
-button{font-family:inherit;cursor:pointer;}
-::-webkit-scrollbar{width:2px;height:2px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:var(--c-surface-highest);border-radius:2px;}
-.no-scrollbar::-webkit-scrollbar{display:none;}.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none;}
-
-/* ── TOP NAV ── */
-#top-nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:rgba(6,10,9,.88);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);border-bottom:1px solid rgba(118,184,42,.08);box-shadow:0 1px 0 rgba(118,184,42,.04);}
-.logo-img{height:36px;object-fit:contain;cursor:pointer;transition:transform .2s cubic-bezier(0.34,1.56,0.64,1),filter var(--tr);}
-.logo-img:hover{transform:scale(1.05);}
-.theme-pill{display:flex;align-items:center;background:var(--c-surface-highest);border-radius:var(--radius-full);padding:3px;gap:2px;}
-.theme-pill button{padding:3px 11px;border:none;border-radius:var(--radius-full);font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;transition:all var(--tr);background:transparent;color:var(--c-on-surface-variant);}
-.theme-pill button.active{background:var(--c-primary);color:var(--c-on-primary);}
-.nav-actions{display:flex;align-items:center;gap:4px;}
-.icon-btn{width:36px;height:36px;background:none;border:none;color:var(--c-on-surface-variant);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-full);transition:background var(--tr),color var(--tr);}
-.icon-btn:hover{background:var(--c-surface-highest);color:var(--c-on-surface);}
-.icon-btn .material-symbols-outlined{font-size:20px;}
-
-/* ── LAYOUT ── */
-#main-content{padding-top:calc(var(--nav-h) + 2px);padding-bottom:calc(var(--player-h) + 70px);flex:1;background:var(--bg-gradient) !important;background-attachment:fixed !important;position:relative;overflow-x:hidden;}
-#main-content::before,#main-content::after{content:'';position:fixed;bottom:0;left:0;width:200%;pointer-events:none;z-index:-1;background-repeat:repeat-x;background-position:bottom;}
-#main-content::before{height:300px;opacity:.15;background-image:linear-gradient(to top,var(--brand-green-forest),transparent);animation:forestScroll 100s linear infinite;}
-#main-content::after{height:200px;opacity:.12;background:radial-gradient(circle at 50% 100%,rgba(118,184,42,0.1),transparent 70%);animation:fogFlicker 8s ease-in-out infinite alternate;}
-[data-theme="cyan"] #main-content::before{opacity:.03;}
-[data-theme="cyan"] #main-content::after{opacity:.05;}
-@keyframes forestScroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
-@keyframes fogFlicker{from{opacity:.05;transform:scale(1);}to{opacity:.15;transform:scale(1.1);}}
-.screen{display:none;padding:0 14px;max-width:880px;margin:0 auto;}
-.screen.active{display:block;animation:screenIn .3s cubic-bezier(0.22,1,0.36,1) both;}
-@keyframes screenIn{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
-
-/* ── BOTTOM NAV ── */
-#bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:100;height:68px;background:rgba(8,8,8,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:space-around;padding:0 4px;padding-bottom:env(safe-area-inset-bottom);}
-.nav-item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 12px;border:none;background:none;color:var(--c-on-surface-variant);border-radius:var(--radius-md);transition:color var(--tr),transform .15s ease;flex:1;position:relative;}
-.nav-item:active{transform:scale(0.88);}
-.nav-item.active{color:var(--c-primary);}
-.nav-item.active::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:20px;height:3px;background:var(--c-primary);border-radius:2px;animation:navPip .25s cubic-bezier(0.34,1.56,0.64,1) both;box-shadow:0 0 8px var(--c-accent-glow);}
-@keyframes navPip{from{width:4px;opacity:0;}to{width:20px;opacity:1;}}
-.nav-item.active .material-symbols-outlined{transform:scale(1.15);filter:drop-shadow(0 0 6px var(--c-accent-glow));}
-.nav-item .material-symbols-outlined{font-size:22px;transition:transform .25s cubic-bezier(0.34,1.56,0.64,1),filter .25s ease;}
-.nav-label{font-size:.55rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
-
-/* ── MINI PLAYER ── */
-#mini-player{position:fixed;bottom:84px;left:12px;right:12px;height:72px;background:var(--c-surface-low);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--c-outline);border-radius:24px;display:flex;align-items:center;gap:12px;padding:0 16px;z-index:900;box-shadow:0 8px 32px rgba(0,0,0,0.1);transition:all 0.4s cubic-bezier(0.175,0.885,0.32,1.275);cursor:pointer;}
-[data-theme="ember"] #mini-player{background:rgba(26,33,30,0.8);border-color:rgba(255,255,255,0.08);box-shadow:0 8px 32px rgba(0,0,0,0.4);}
-#mini-player.playing{border:1px solid var(--c-primary);box-shadow:0 0 20px var(--c-accent-glow-sm);}
-#mini-player.retracted{transform:translateY(40px) scale(0.95);opacity:0.8;height:50px;}
-#mini-player.retracted .mp-art{width:30px;height:30px;}
-#mini-player.retracted .mp-title{font-size:12px;}
-.mp-art{width:42px;height:42px;border-radius:var(--radius-md);background:var(--c-surface-highest);display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;}
-.pulse-ring{position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--c-primary);opacity:0;animation:pring 2s ease-out infinite;animation-play-state:paused;}
-@keyframes pring{0%{opacity:.7;transform:scale(.86);}100%{opacity:0;transform:scale(1.35);}}
-.mp-info{flex:1;min-width:0;}
-.mp-title{font-family:var(--font-display);font-weight:700;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.mp-sub{font-size:.64rem;color:var(--c-on-surface-variant);}
-.mini-play{width:40px;height:40px;border-radius:var(--radius-full);background:var(--c-primary);color:var(--c-on-primary);border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px var(--c-accent-glow);transition:transform .2s cubic-bezier(0.34,1.56,0.64,1),box-shadow var(--tr);flex-shrink:0;}
-.mini-play:hover{transform:scale(1.12);box-shadow:0 6px 18px var(--c-accent-glow);}
-.mini-play:active{transform:scale(.86);}
-
-/* ── LIVE BADGE ── */
-.live-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:var(--c-live);border-radius:var(--radius-full);font-size:.55rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#fff;box-shadow:0 0 12px var(--c-accent-glow);}
-.live-dot{width:5px;height:5px;border-radius:50%;background:#fff;animation:blink 1.2s ease-in-out infinite;}
-@keyframes blink{0%,100%{opacity:1;}50%{opacity:.2;}}
-
-/* ── BUTTONS ── */
-.btn-primary{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;background:var(--c-primary);color:var(--c-on-primary);border:none;border-radius:var(--radius-full);font-family:var(--font-display);font-weight:700;font-size:.82rem;box-shadow:0 5px 18px var(--c-accent-glow);transition:transform var(--tr),box-shadow var(--tr);position:relative;overflow:hidden;}
-.btn-primary::after{content:'';position:absolute;inset:0;background:rgba(255,255,255,0);transition:background .15s ease;}
-.btn-primary:active::after{background:rgba(255,255,255,0.15);}
-.btn-primary:hover{transform:scale(1.04);box-shadow:0 8px 26px var(--c-accent-glow);}.btn-primary:active{transform:scale(.96);}
-.btn-secondary{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;background:rgba(255,255,255,.07);backdrop-filter:blur(8px);color:var(--c-on-surface);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-full);font-weight:600;font-size:.78rem;transition:background var(--tr),transform var(--tr);}
-.btn-secondary:hover{background:rgba(255,255,255,.12);}.btn-secondary:active{transform:scale(.96);}
-.btn-ghost{background:none;border:none;font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);transition:opacity var(--tr);}
-.btn-ghost:active{opacity:.6;}
-
-/* ── WAVEFORM ── */
-.waveform{display:flex;align-items:center;gap:3px;}
-.wave-bar{width:3px;background:var(--c-primary);border-radius:2px;height:5px;animation:none;}
-.playing .wave-bar{animation:wave 1.2s ease-in-out infinite;}
-@keyframes wave{0%,100%{height:4px;}50%{height:40px;}}
-@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-.rotating{animation:spin 1s linear infinite;display:inline-block;}
-@keyframes pulse-red{0%{transform:scale(0.95);box-shadow:0 0 0 0 rgba(255,59,48,.7);}70%{transform:scale(1);box-shadow:0 0 0 10px rgba(255,59,48,0);}100%{transform:scale(0.95);box-shadow:0 0 0 0 rgba(255,59,48,0);}}
-.pulse-dot.active{background:#ff3b30 !important;box-shadow:0 0 0 rgba(255,59,48,.4);animation:pulse-red 2s infinite;}
-@keyframes pulse-active{0%{box-shadow:0 0 0 0 rgba(118,184,42,.7);}70%{box-shadow:0 0 0 15px rgba(118,184,42,0);}100%{box-shadow:0 0 0 0 rgba(118,184,42,0);}}
-.playing-pulse{animation:pulse-active 2s infinite;}
-
-/* ── CHIP ── */
-.chip-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px;}
-.chip{padding:5px 13px;border-radius:var(--radius-full);font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;background:var(--c-surface-highest);color:var(--c-on-surface-variant);border:none;transition:background var(--tr),color var(--tr);}
-.chip.active{background:var(--c-primary);color:var(--c-on-primary);}
-
-/* ── UTILITY ── */
-.divider{height:1px;background:rgba(255,255,255,.04);margin:16px 0;}
-.screen-title{font-family:var(--font-display);font-size:1.7rem;font-weight:800;letter-spacing:-.03em;line-height:1;margin:16px 0 4px;}
-.screen-sub{font-size:.78rem;color:var(--c-on-surface-variant);margin-bottom:16px;line-height:1.5;}
-.section-hdr{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;}
-.section-label{font-family:var(--font-display);font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--c-on-surface-variant);}
-
-/* ── AD SLOTS ── */
-.ad-slot{background:var(--c-surface-low);border-radius:var(--radius-lg);overflow:hidden;position:relative;margin:14px 0;}
-.ad-label{position:absolute;top:5px;right:8px;font-size:.48rem;color:var(--c-on-surface-variant);text-transform:uppercase;letter-spacing:.1em;font-weight:600;opacity:.35;}
-.ad-placeholder{display:flex;align-items:center;justify-content:center;min-height:90px;width:100%;}
-.ad-box{border-radius:8px;background:var(--c-surface-highest);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;font-size:.6rem;color:var(--c-outline);font-style:italic;text-align:center;padding:8px;}
-
-/* ── STATUS BANNER ── */
-#sb-status{background:rgba(118,184,42,.07);border:1px solid rgba(118,184,42,.2);border-radius:var(--radius-md);padding:10px 14px;font-size:.74rem;color:var(--c-on-surface-variant);line-height:1.5;margin-bottom:14px;display:none;}
-#sb-status.visible{display:block;}
-#sb-status strong{color:var(--c-on-surface);}
-#sb-status code{background:var(--c-surface-highest);padding:1px 5px;border-radius:3px;font-size:.7rem;color:var(--c-primary);}
-
-/* ══════════════════════════════════════════════════
-   HOME SCREEN
-══════════════════════════════════════════════════ */
-.now-on-air{position:relative;border-radius:var(--radius-xl);overflow:hidden;background:linear-gradient(160deg,var(--brand-green-forest) 0%,var(--c-surface) 60%);margin-bottom:6px;margin-top:10px;}
-.noa-glow{position:absolute;inset:0;background:radial-gradient(ellipse at 70% 30%,rgba(118,184,42,.18) 0%,transparent 60%),radial-gradient(ellipse at 20% 80%,rgba(27,61,47,.25) 0%,transparent 50%);pointer-events:none;}
-.noa-wave-bg{position:absolute;bottom:0;left:0;right:0;height:60px;display:flex;align-items:flex-end;justify-content:center;gap:2px;padding-bottom:0;opacity:.07;overflow:hidden;}
-.noa-top{position:relative;display:flex;justify-content:space-between;align-items:center;padding:14px 16px 0;}
-.listeners-pill{display:flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(118,184,42,.08);backdrop-filter:blur(8px);border-radius:var(--radius-full);font-size:.62rem;font-weight:600;color:var(--brand-green-leaf);border:1px solid rgba(118,184,42,.15);transition:all var(--tr);}
-.now-on-air.playing .listeners-pill{background:rgba(118,184,42,.14);box-shadow:0 0 10px rgba(118,184,42,.15);}
-.noa-body{position:relative;display:flex;align-items:center;gap:14px;padding:16px 16px 14px;}
-.noa-orb{width:72px;height:72px;border-radius:14px;flex-shrink:0;background:linear-gradient(135deg,var(--brand-green-forest),#0a1a0f);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(0,0,0,.5),0 0 0 1px rgba(118,184,42,.15);position:relative;overflow:hidden;}
-.noa-orb-pulse{position:absolute;inset:0;background:radial-gradient(circle at 60% 40%,rgba(118,184,42,.35),transparent 70%);animation:orbPulse 2.4s ease-in-out infinite alternate;animation-play-state:paused;}
-@keyframes orbPulse{from{opacity:.4;}to{opacity:1;}}
-.noa-orb .material-symbols-outlined{font-size:32px;color:var(--c-primary);font-variation-settings:'FILL' 1;position:relative;z-index:1;}
-.noa-info{flex:1;min-width:0;}
-.noa-eyebrow{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--c-tertiary);margin-bottom:5px;}
-.noa-title{font-family:var(--font-display);font-size:1.15rem;font-weight:800;line-height:1.2;letter-spacing:-.02em;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.noa-host{font-size:.72rem;color:var(--c-on-surface-variant);margin-bottom:12px;}
-.noa-actions{display:flex;gap:8px;align-items:center;}
-.noa-bar{height:3px;background:rgba(255,255,255,.06);margin:0 16px;border-radius:2px;overflow:hidden;}
-.noa-bar-fill{height:100%;width:0;background:linear-gradient(90deg,var(--c-primary),var(--c-tertiary));border-radius:2px;transition:width 1s linear;}
-.noa-bar-fill.live-stream{animation:streamPulse 3s ease-in-out infinite;}
-@keyframes streamPulse{0%,100%{width:30%;}50%{width:75%;}}
-.next-up-strip{display:flex;align-items:center;gap:10px;padding:10px 16px 14px;position:relative;}
-.nu-badge{font-size:.55rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--brand-green-leaf);background:rgba(118,184,42,.1);border-radius:var(--radius-full);padding:3px 9px;flex-shrink:0;border:1px solid rgba(118,184,42,.2);}
-.nu-label{font-size:.75rem;color:var(--c-on-surface-variant);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.nu-label strong{color:var(--c-on-surface);}
-
-
-/* ── HOME SECTIONS ── */
-.home-section{margin-bottom:20px;animation:screenIn .4s cubic-bezier(0.22,1,0.36,1) both;}
-.home-section:nth-child(1){animation-delay:.05s;}
-.home-section:nth-child(2){animation-delay:.1s;}
-.home-section:nth-child(3){animation-delay:.15s;}
-.home-section:nth-child(4){animation-delay:.2s;}
-.home-section:nth-child(5){animation-delay:.25s;}
-.home-section-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-.content-reel{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin:0 -14px;padding-left:14px;padding-right:14px;}
-.content-card{flex:none;width:150px;border-radius:var(--radius-lg);overflow:hidden;background:var(--c-surface-high);cursor:pointer;position:relative;border:1px solid rgba(255,255,255,.04);transition:transform var(--tr),border-color var(--tr),box-shadow var(--tr);}
-.content-card:hover{transform:translateY(-3px);border-color:rgba(118,184,42,.2);box-shadow:0 8px 20px rgba(0,0,0,.3);}
-.content-card:active{transform:scale(.97);}
-.cc-thumb{height:90px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;position:relative;}
-.cc-play-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);opacity:0;transition:opacity var(--tr);}
-.content-card:hover .cc-play-overlay{opacity:1;}
-.cc-play-overlay .material-symbols-outlined{font-size:28px;color:#fff;font-variation-settings:'FILL' 1;}
-.cc-body{padding:8px 10px 10px;}
-.cc-type{font-size:.54rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);margin-bottom:3px;}
-.cc-title{font-size:.76rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.cc-meta{font-size:.62rem;color:var(--c-on-surface-variant);margin-top:4px;}
-.cc-shoutout{background:linear-gradient(135deg,var(--c-surface-high),rgba(118,184,42,.06));border-color:rgba(118,184,42,.12);}
-.cc-shoutout .cc-type{color:var(--c-tertiary);}
-
-/* ── CHAT PREVIEW ── */
-.chat-preview-wrap{background:var(--c-surface-low);border-radius:var(--radius-xl);overflow:hidden;border:1px solid rgba(118,184,42,.1);transition:border-color .3s ease,box-shadow .3s ease;}
-.chat-preview-wrap:focus-within{border-color:rgba(118,184,42,.25);box-shadow:0 0 0 3px rgba(118,184,42,.06);}
-.chat-preview-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;border-bottom:1px solid rgba(255,255,255,.04);}
-.chat-preview-title{font-family:var(--font-display);font-size:.82rem;font-weight:800;display:flex;align-items:center;gap:8px;}
-.chat-live-dot{width:6px;height:6px;border-radius:50%;background:var(--c-live);animation:blink 1.2s ease-in-out infinite;}
-.chat-preview-msgs{display:flex;flex-direction:column;gap:7px;padding:10px 14px;}
-.cpm{display:flex;align-items:flex-start;gap:8px;animation:msgIn .35s cubic-bezier(0.22,1,0.36,1) both;}
-.cpm:nth-child(2){animation-delay:.07s;}
-.cpm:nth-child(3){animation-delay:.14s;}
-.cpm-av{width:28px;height:28px;border-radius:50%;background:var(--brand-green-forest);display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:var(--brand-green-leaf);flex-shrink:0;font-family:var(--font-display);border:1px solid rgba(118,184,42,.2);transition:transform .2s cubic-bezier(0.34,1.56,0.64,1);}
-.cpm:hover .cpm-av{transform:scale(1.12);}
-.cpm-body{flex:1;}
-.cpm-user{font-size:.64rem;font-weight:700;color:var(--brand-green-leaf);margin-bottom:1px;}
-.cpm-text{font-size:.78rem;line-height:1.4;}
-.chat-cta{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid rgba(255,255,255,.04);background:rgba(255,255,255,.02);}
-.chat-cta-input{flex:1;background:var(--c-surface-highest);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-full);padding:8px 14px;color:var(--c-on-surface);font-family:var(--font-body);font-size:.82rem;outline:none;transition:border-color var(--tr),box-shadow var(--tr);cursor:text;}
-.chat-cta-input:focus{border-color:var(--brand-green-leaf);box-shadow:0 0 0 3px rgba(118,184,42,.08);}
-.chat-cta-btn{width:36px;height:36px;border-radius:var(--radius-full);background:var(--c-primary);color:var(--c-on-primary);border:none;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .2s cubic-bezier(0.34,1.56,0.64,1),box-shadow var(--tr);box-shadow:0 2px 8px var(--c-accent-glow);}
-.chat-cta-btn:hover{transform:scale(1.12);box-shadow:0 4px 14px var(--c-accent-glow);}
-.chat-cta-btn:active{transform:scale(.86);}
-
-/* ── VAULT ── */
-.vault-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.vault-card{border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;background:var(--c-surface-low);border:1px solid rgba(255,255,255,.04);position:relative;transition:transform var(--tr),box-shadow var(--tr);}
-.vault-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.25);}
-.vault-card:active{transform:scale(.97);}
-.vault-card.featured{grid-column:1/-1;}
-.vc-thumb{height:80px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;position:relative;}
-.vault-card.featured .vc-thumb{height:110px;}
-.vc-lock{position:absolute;top:7px;right:7px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;}
-.vc-lock .material-symbols-outlined{font-size:12px;color:var(--c-primary);font-variation-settings:'FILL' 1;}
-.vc-body{padding:8px 10px 10px;}
-.vc-tag{display:inline-block;font-size:.52rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:2px 7px;border-radius:var(--radius-full);margin-bottom:4px;}
-.vc-tag.replay{background:rgba(118,184,42,.1);color:var(--c-primary);}
-.vc-tag.exclusive{background:rgba(118,184,42,.15);color:var(--c-primary);border:1px solid rgba(118,184,42,.2);}
-.vc-tag.interview{background:rgba(255,200,0,.1);color:#ffcc44;}
-.vc-title{font-size:.8rem;font-weight:600;line-height:1.3;margin-bottom:3px;}
-.vc-meta{font-size:.62rem;color:var(--c-on-surface-variant);}
-
-/* ── RETURN CARD ── */
-.return-card{border-radius:var(--radius-xl);background:linear-gradient(140deg,var(--brand-green-forest) 0%,var(--c-surface) 100%);border:1px solid rgba(118,184,42,.15);padding:16px;position:relative;overflow:hidden;margin-bottom:8px;}
-.return-card::before{content:'';position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:var(--c-tertiary);opacity:.04;filter:blur(30px);}
-.rc-eyebrow{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--c-tertiary);margin-bottom:5px;}
-.rc-title{font-family:var(--font-display);font-size:1rem;font-weight:800;letter-spacing:-.02em;margin-bottom:4px;}
-.rc-desc{font-size:.74rem;color:var(--c-on-surface-variant);line-height:1.5;margin-bottom:12px;}
-.rc-shows{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
-.rc-show-row{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:var(--radius-md);padding:8px 10px;}
-.rc-time{font-family:var(--font-display);font-size:.78rem;font-weight:800;color:var(--c-tertiary);width:44px;flex-shrink:0;}
-.rc-show-info{flex:1;}
-.rc-show-name{font-size:.8rem;font-weight:600;}
-.rc-show-host{font-size:.65rem;color:var(--c-on-surface-variant);}
-.rc-remind-btn.set{background:rgba(118,184,42,.2);border-color:var(--brand-green-leaf);color:var(--c-primary);}
-
-/* ── FEED ── */
-.feed-grid{display:grid;grid-template-columns:1fr;gap:8px;}
-@media(min-width:560px){.feed-grid{grid-template-columns:1fr 1fr;}}
-.feed-card{background:var(--c-surface-low);border-radius:var(--radius-lg);padding:14px;cursor:pointer;transition:background var(--tr),transform var(--tr);border:1px solid rgba(255,255,255,.03);}
-.feed-card:hover{background:var(--c-surface-high);}
-.feed-card:active{transform:scale(.98);}
-.fc-tag{display:inline-block;padding:2px 8px;border-radius:var(--radius-full);font-size:.56rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:rgba(118,184,42,.1);color:var(--c-primary);margin-bottom:6px;}
-.fc-tag.accent{background:rgba(118,184,42,.1);color:var(--c-primary);}
-.fc-tag.live{background:rgba(118,184,42,.12);color:var(--c-live);}
-.fc-title{font-size:.9rem;font-weight:700;line-height:1.3;margin-bottom:4px;}
-.fc-body{font-size:.74rem;color:var(--c-on-surface-variant);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.fc-footer{display:flex;align-items:center;gap:6px;margin-top:8px;}
-.fc-time{font-size:.58rem;color:var(--c-on-surface-variant);}
-
-/* ── PLAYER ── */
-#screen-player{padding:0;}
-#screen-player.active{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;}
-.pb-blob{position:fixed;border-radius:50%;filter:blur(100px);opacity:.1;pointer-events:none;z-index:-1;}
-.blob-1{width:55vw;height:55vw;background:var(--c-primary);top:5%;left:-15%;}
-.blob-2{width:45vw;height:45vw;background:var(--c-tertiary);bottom:15%;right:-10%;}
-.player-full{width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:20px;}
-.player-art{width:250px;height:250px;background:#000;border-radius:50% !important;border:10px solid #111;position:relative;display:flex;align-items:center;justify-content:center;box-shadow:0 20px 50px rgba(0,0,0,0.5);overflow:hidden;flex-shrink:0;}
-.player-art::after{display:none;}/* grooves handled by vinyl-grooves div */
-.vinyl-grooves{position:absolute;inset:0;background:repeating-radial-gradient(circle,transparent 0,transparent 2px,rgba(255,255,255,0.03) 3px);border-radius:50%;pointer-events:none;}
-.vinyl-label{width:70px;height:70px;background:var(--brand-green-forest);border-radius:50%;z-index:5;border:3px solid #000;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 10px rgba(0,0,0,0.5);}
-.vinyl-logo{width:85%;height:85%;object-fit:contain;}
-@keyframes recordSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-.player-art.is-spinning{animation:recordSpin 5s linear infinite;}
-.player-art-glow{position:absolute;inset:0;background:radial-gradient(circle at 60% 40%,rgba(118,184,42,.3),transparent 65%);animation:orbPulse 2.4s ease-in-out infinite alternate;animation-play-state:paused;}
-.player-art .material-symbols-outlined{font-size:52px;color:var(--c-primary);font-variation-settings:'FILL' 1;position:relative;z-index:1;}
-.player-info{text-align:center;width:100%;}
-.player-title{font-family:var(--font-display);font-size:1.28rem;font-weight:800;letter-spacing:-.03em;line-height:1.15;margin-bottom:3px;}
-.player-host{font-size:.78rem;color:var(--c-on-surface-variant);}
-.tl-bar{height:3px;background:var(--c-surface-highest);border-radius:2px;overflow:hidden;cursor:pointer;margin:8px 0 4px;width:100%;}
-.tl-fill{height:100%;background:linear-gradient(90deg,var(--c-primary),var(--c-primary-dim));border-radius:2px;width:60%;}
-.tl-labels{display:flex;justify-content:space-between;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--c-on-surface-variant);}
-.tl-labels .live-lbl{color:var(--c-primary);}
-.p-controls{display:flex;align-items:center;justify-content:center;gap:18px;width:100%;}
-.ctrl-btn{background:none;border:none;color:var(--c-on-surface-variant);display:flex;align-items:center;justify-content:center;transition:color var(--tr),transform var(--tr);}
-.ctrl-btn:hover{color:var(--c-on-surface);}
-.ctrl-btn .material-symbols-outlined{font-size:26px;}
-.play-main{width:64px;height:64px;border-radius:var(--radius-full);background:var(--c-primary);color:var(--c-on-primary);border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 26px var(--c-accent-glow);transition:transform .2s cubic-bezier(0.34,1.56,0.64,1),box-shadow var(--tr);}
-.play-main:hover{transform:scale(1.1);box-shadow:0 12px 34px var(--c-accent-glow);}
-.play-main:active{transform:scale(.92);}
-.play-main .material-symbols-outlined{font-size:30px;font-variation-settings:'FILL' 1;}
-.vol-row{display:flex;align-items:center;gap:9px;width:100%;}
-.vol-row .material-symbols-outlined{font-size:16px;color:var(--c-on-surface-variant);}
-.vol-slider{flex:1;-webkit-appearance:none;appearance:none;height:4px;background:var(--c-surface-highest);border-radius:2px;outline:none;cursor:pointer;transition:height var(--tr);}
-.vol-slider:hover{height:6px;}
-.vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--brand-green-leaf);cursor:pointer;box-shadow:0 0 8px var(--c-accent-glow);transition:transform .15s ease;}
-.vol-slider::-webkit-slider-thumb:hover{transform:scale(1.2);}
-.vol-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--brand-green-leaf);border:none;cursor:pointer;}
-.p-actions{display:flex;justify-content:center;gap:22px;width:100%;}
-.p-act-btn{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;color:var(--c-on-surface-variant);transition:color var(--tr);}
-.p-act-btn:hover{color:var(--c-primary);}
-.p-act-btn .material-symbols-outlined{font-size:20px;}
-.p-act-btn span:last-child{font-size:.52rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;}
-#player-status-bar{text-align:center;font-size:.7rem;color:var(--c-on-surface-variant);min-height:20px;}
-
-/* ── COMMUNITY ── */
-.chat-wrap{display:flex;flex-direction:column;height:calc(100dvh - var(--nav-h) - var(--player-h) - 68px - 76px);min-height:260px;}
-.chat-msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:9px;padding:10px 0;}
-.cmsg{display:flex;gap:8px;align-items:flex-start;animation:msgIn .3s cubic-bezier(0.22,1,0.36,1) both;}
-@keyframes msgIn{from{opacity:0;transform:translateY(8px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}
-.cav{width:28px;height:28px;border-radius:50%;background:var(--c-surface-highest);display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;color:var(--c-primary);flex-shrink:0;font-family:var(--font-display);}
-.cbw{flex:1;}.cuser{font-size:.65rem;font-weight:700;color:var(--c-primary);margin-bottom:2px;}
-.cbubble{background:var(--c-surface-low);border-radius:0 var(--radius-lg) var(--radius-lg) var(--radius-lg);padding:8px 11px;font-size:.8rem;line-height:1.5;display:inline-block;max-width:100%;transition:background var(--tr);}
-.ctime{font-size:.54rem;color:var(--c-on-surface-variant);margin-top:2px;}
-.cmsg.own{flex-direction:row-reverse;}
-.cmsg.own .cbubble{background:linear-gradient(135deg,var(--brand-green-forest),var(--brand-green-leaf));color:#fff;border-radius:var(--radius-lg) 0 var(--radius-lg) var(--radius-lg);}
-.cmsg.own .cuser{color:var(--c-on-surface-variant);text-align:right;}
-.chat-input-row{display:flex;gap:7px;align-items:center;padding:9px 0 0;border-top:1px solid rgba(255,255,255,.05);}
-.chat-input{flex:1;background:var(--c-surface-high);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-full);padding:9px 13px;color:var(--c-on-surface);font-family:var(--font-body);font-size:.84rem;outline:none;transition:border-color var(--tr),box-shadow var(--tr);}
-.chat-input:focus{border-color:var(--brand-green-leaf);box-shadow:0 0 0 3px rgba(118,184,42,.1);}
-.chat-send{width:36px;height:36px;border-radius:var(--radius-full);background:var(--c-primary);color:var(--c-on-primary);border:none;display:flex;align-items:center;justify-content:center;transition:transform .2s cubic-bezier(0.34,1.56,0.64,1),box-shadow var(--tr);flex-shrink:0;box-shadow:0 2px 8px var(--c-accent-glow);}
-.chat-send:hover{transform:scale(1.12);box-shadow:0 4px 14px var(--c-accent-glow);}
-.chat-send:active{transform:scale(.88);}
-.pts-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:rgba(118,184,42,.1);border:1px solid rgba(118,184,42,.2);border-radius:var(--radius-full);font-size:.54rem;font-weight:700;color:var(--c-primary);text-transform:uppercase;letter-spacing:.06em;}
-
-/* ── REWARDS ── */
-.pts-hero{text-align:center;padding:18px 0 20px;}
-.pts-display{display:inline-flex;flex-direction:column;align-items:center;background:linear-gradient(135deg,var(--c-surface-high),var(--c-surface-highest));border-radius:var(--radius-xl);padding:18px 32px;margin:10px 0;border:1px solid rgba(118,184,42,.15);box-shadow:0 9px 28px var(--c-accent-glow-sm),0 0 0 1px rgba(118,184,42,.05);animation:ptsFadeIn .6s cubic-bezier(0.22,1,0.36,1) both;}
-@keyframes ptsFadeIn{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:scale(1);}}
-.pts-num{font-family:var(--font-display);font-size:2.6rem;font-weight:800;letter-spacing:-.05em;color:var(--brand-green-leaf);line-height:1;text-shadow:0 0 20px var(--c-accent-glow);}
-.pts-lbl{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:var(--c-on-surface-variant);margin-top:3px;}
-.tier-row{display:flex;gap:5px;justify-content:center;margin:10px 0 18px;flex-wrap:wrap;}
-.tier-badge{display:flex;align-items:center;gap:4px;padding:5px 11px;border-radius:var(--radius-full);font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid rgba(255,255,255,.07);background:var(--c-surface-highest);color:var(--c-on-surface-variant);transition:all .3s cubic-bezier(0.34,1.56,0.64,1);}
-.tier-badge.active{background:var(--c-primary);color:var(--c-on-primary);border-color:transparent;box-shadow:0 3px 14px var(--c-accent-glow);transform:scale(1.08);}
-#tier-progress-bar{transition:width 1.2s cubic-bezier(0.22,1,0.36,1);}
-.ach-title{font-weight:700;font-size:.88rem;margin-bottom:2px;}
-.ach-desc{font-size:.7rem;color:var(--c-on-surface-variant);margin-bottom:9px;}
-.prog-wrap{height:5px;background:var(--c-surface-highest);border-radius:3px;overflow:hidden;}
-.prog-fill{height:100%;background:linear-gradient(90deg,var(--brand-green-forest),var(--brand-green-leaf));border-radius:3px;transition:width .5s ease;box-shadow:0 0 6px rgba(118,184,42,.4);}
-.prog-labels{display:flex;justify-content:space-between;margin-top:4px;}
-.prog-labels span{font-size:.58rem;color:var(--c-on-surface-variant);}
-.prog-labels .pts{color:var(--c-primary);font-weight:700;}
-.rwd-card{background:var(--c-surface-low);border-radius:var(--radius-md);padding:12px;display:flex;align-items:center;gap:11px;margin-bottom:6px;cursor:pointer;transition:background var(--tr),transform var(--tr);border:1px solid rgba(255,255,255,.03);}
-.rwd-card:hover{background:var(--c-surface-container);}
-.rwd-card:active{transform:scale(.98);}
-.rwd-icon{width:44px;height:44px;border-radius:var(--radius-md);background:var(--brand-green-forest);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1.2rem;border:1px solid rgba(118,184,42,.15);transition:transform .2s cubic-bezier(0.34,1.56,0.64,1);}
-.rwd-card:hover .rwd-icon{transform:scale(1.1);}
-.rwd-info{flex:1;min-width:0;}.rwd-name{font-weight:700;font-size:.84rem;margin-bottom:2px;}.rwd-desc{font-size:.68rem;color:var(--c-on-surface-variant);}
-.rwd-pts{font-family:var(--font-display);font-weight:800;font-size:.84rem;color:var(--brand-green-leaf);text-align:right;flex-shrink:0;}
-.rwd-pts small{display:block;font-size:.52rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--c-on-surface-variant);}
-
-/* ── LEADERBOARD ── */
-.podium{display:flex;justify-content:center;align-items:flex-end;gap:12px;padding:24px 10px;margin:20px 0;background:rgba(118,184,42,.02);border-radius:var(--radius-xl);border:1px solid rgba(118,184,42,.06);}
-.ps.second{order:1;}
-.ps.third{order:3;}
-.pav{width:48px;height:48px;border-radius:50%;background:var(--c-surface-highest);display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:800;font-family:var(--font-display);position:relative;border:3px solid transparent;margin-bottom:10px;transition:transform .3s cubic-bezier(0.34,1.56,0.64,1);}
-.ps:hover .pav{transform:scale(1.1);}
-.ps.first .pav{border-color:var(--brand-green-leaf);width:60px;height:60px;font-size:1.5rem;box-shadow:0 0 16px var(--c-accent-glow);}
-.ps.second .pav{color:#c0c0c0;border-color:#c0c0c0;}.ps.third .pav{color:#cd7f32;border-color:#cd7f32;}
-.prank{position:absolute;bottom:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:var(--c-primary);color:var(--c-on-primary);font-size:.54rem;font-weight:800;display:flex;align-items:center;justify-content:center;}
-.ps.second .prank{background:#c0c0c0;color:#000;}.ps.third .prank{background:#cd7f32;color:#fff;}
-.pname{font-size:.64rem;font-weight:700;text-align:center;}.ppts{font-size:.58rem;color:var(--brand-green-leaf);text-align:center;font-weight:700;}
-.pbar{width:100%;border-radius:12px 12px 4px 4px;transition:height .7s cubic-bezier(0.22,1,0.36,1);}
-.ps.first .pbar{height:120px;background:linear-gradient(180deg,var(--brand-green-leaf),var(--brand-green-forest));box-shadow:0 0 20px var(--c-accent-glow);border:1px solid rgba(255,255,255,0.1);}
-.ps.second .pbar{height:80px;background:var(--c-surface-highest);border:1px solid var(--brand-green-forest);}
-.ps.third .pbar{height:50px;background:var(--c-surface-highest);border:1px solid var(--brand-green-forest);}
-.lb-row{display:flex;align-items:center;gap:9px;padding:9px 11px;background:var(--c-surface-low);border-radius:var(--radius-md);margin-bottom:4px;border-left:3px solid transparent;transition:all var(--tr),transform var(--tr);}
-.lb-row:hover{background:var(--c-surface-highest);border-left-color:var(--brand-green-leaf);transform:translateX(3px);}
-.lb-row:active{transform:scale(.99);}
-.lb-rank{width:20px;text-align:center;font-family:var(--font-display);font-weight:800;font-size:.74rem;color:var(--c-on-surface-variant);flex-shrink:0;}
-.lb-av{width:32px;height:32px;border-radius:var(--radius-sm);background:var(--brand-green-forest);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.74rem;flex-shrink:0;color:var(--brand-green-leaf);font-family:var(--font-display);border:1px solid rgba(118,184,42,.2);}
-.lb-name{flex:1;font-weight:600;font-size:.82rem;}.lb-pts{font-family:var(--font-display);font-weight:800;font-size:.82rem;color:var(--brand-green-leaf);}
-
-/* ── PERKS ── */
-.perks-scroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;margin:0 -14px;padding-left:14px;padding-right:14px;}
-.perk-card{flex:none;width:200px;border-radius:var(--radius-xl);background:var(--c-surface-highest);overflow:hidden;cursor:pointer;position:relative;transition:transform var(--tr),box-shadow var(--tr);}
-.perk-card::before{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.07) 50%,transparent 60%);transform:translateX(-100%);transition:transform .5s ease;z-index:1;pointer-events:none;}
-.perk-card:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,.35);}
-.perk-card:hover::before{transform:translateX(100%);}
-.perk-card:active{transform:scale(.97);}
-.perk-inner{padding:12px;}.perk-disc{position:absolute;top:7px;right:7px;background:var(--c-primary);color:var(--c-on-primary);padding:2px 8px;border-radius:var(--radius-full);font-size:.55rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;}
-.perk-name{font-weight:700;font-size:.86rem;margin-bottom:2px;}.perk-partner{font-size:.66rem;color:var(--c-on-surface-variant);margin-bottom:9px;}
-.claim-btn{width:100%;padding:7px;border:1px solid var(--c-primary);border-radius:var(--radius-md);background:transparent;color:var(--c-primary);font-weight:700;font-size:.7rem;transition:background var(--tr),transform .15s ease;text-transform:uppercase;letter-spacing:.05em;}
-.claim-btn:hover{background:var(--c-primary);color:var(--c-on-primary);}
-.claim-btn:active{transform:scale(.93);}
-
-/* ── REFERRAL ── */
-.ref-card{border-radius:var(--radius-xl);padding:18px;background:linear-gradient(135deg,var(--brand-green-forest),var(--c-surface-container));border:1px solid rgba(118,184,42,.2);position:relative;overflow:hidden;margin-bottom:18px;transition:box-shadow var(--tr);}
-.ref-card::before{content:'';position:absolute;top:-50%;left:-60%;width:50%;height:200%;background:linear-gradient(105deg,transparent,rgba(118,184,42,.08),transparent);transform:skewX(-15deg);animation:refShine 4s ease-in-out infinite;}
-@keyframes refShine{0%,100%{left:-60%;}50%{left:120%;}}
-.ref-code{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.3);border-radius:var(--radius-md);padding:10px 14px;margin:10px 0;font-family:monospace;font-size:1.1rem;font-weight:800;letter-spacing:.18em;color:var(--brand-green-leaf);border:1px solid rgba(118,184,42,.25);text-shadow:0 0 12px var(--c-accent-glow);}
-.copy-btn{background:none;border:none;color:var(--c-on-surface-variant);display:flex;align-items:center;justify-content:center;margin-left:auto;transition:color var(--tr);}.copy-btn:hover{color:var(--c-primary);}
-
-/* ── EVENTS ── */
-.events-list{display:flex;flex-direction:column;gap:8px;}
-.ev-card{background:var(--c-surface-low);border-radius:var(--radius-lg);overflow:hidden;cursor:pointer;display:flex;align-items:stretch;border:1px solid rgba(255,255,255,.03);transition:transform var(--tr),box-shadow var(--tr);}
-.ev-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.2);}
-.ev-card:active{transform:scale(.98);}
-.ev-date{width:60px;background:var(--c-surface-highest);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 5px;flex-shrink:0;gap:1px;}
-.ev-month{font-size:.54rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);}
-.ev-day{font-family:var(--font-display);font-size:1.5rem;font-weight:800;line-height:1;}
-.ev-dow{font-size:.54rem;color:var(--c-on-surface-variant);font-weight:600;}
-.ev-info{flex:1;padding:12px;}.ev-title{font-weight:700;font-size:.86rem;margin-bottom:3px;}
-.ev-meta{font-size:.68rem;color:var(--c-on-surface-variant);display:flex;gap:9px;flex-wrap:wrap;align-items:center;}
-.ev-tag{display:inline-block;padding:2px 7px;border-radius:var(--radius-full);font-size:.54rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px;}
-.ev-tag.live{background:rgba(118,184,42,.15);color:var(--c-live);}.ev-tag.upcoming{background:rgba(118,184,42,.08);color:var(--c-primary);}.ev-tag.reward{background:rgba(118,184,42,.12);color:var(--c-primary);}
-
-/* ── AUTH ── */
-.auth-card{background:var(--c-surface-low);border-radius:var(--radius-xl);padding:20px;border:1px solid rgba(255,255,255,.05);}
-.field{margin-bottom:12px;}
-.field label{display:block;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--c-on-surface-variant);margin-bottom:5px;}
-.field input{width:100%;background:var(--c-surface-high);border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-md);padding:10px 13px;color:var(--c-on-surface);font-family:var(--font-body);font-size:.86rem;outline:none;transition:border-color var(--tr);}
-.field input:focus{border-color:var(--c-primary);}
-.auth-error{font-size:.7rem;color:var(--c-error);margin-bottom:10px;display:none;}
-.auth-tabs{display:flex;margin-bottom:16px;background:var(--c-surface-highest);border-radius:var(--radius-full);padding:3px;}
-.auth-tab{flex:1;padding:6px;border:none;border-radius:var(--radius-full);font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;background:transparent;color:var(--c-on-surface-variant);transition:all var(--tr);}
-.auth-tab.active{background:var(--c-primary);color:var(--c-on-primary);}
-
-/* ── TOAST / POP ── */
-#toast-container{position:fixed;bottom:152px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:5px;pointer-events:none;align-items:center;}
-.toast{background:var(--c-surface-highest);border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-full);padding:8px 16px;font-size:.74rem;font-weight:600;display:flex;align-items:center;gap:6px;box-shadow:0 5px 18px rgba(0,0,0,.4);animation:tIn .35s cubic-bezier(0.34,1.56,0.64,1),tOut .27s ease 2.5s forwards;white-space:nowrap;}
-.shoutout-toast{border-radius:var(--radius-lg);padding:10px 14px;background:linear-gradient(135deg,var(--c-surface-highest),rgba(118,184,42,.08));border:1px solid rgba(118,184,42,.2);white-space:normal;max-width:280px;animation:tIn .35s cubic-bezier(0.34,1.56,0.64,1),tOut .27s ease 4.7s forwards;}
-.toast .material-symbols-outlined{font-size:14px;color:var(--c-primary);}
-@keyframes tIn{from{opacity:0;transform:translateY(12px) scale(.88);}to{opacity:1;transform:translateY(0) scale(1);}}
-@keyframes tOut{from{opacity:1;}to{opacity:0;}}
-.pts-pop{position:fixed;z-index:9998;font-family:var(--font-display);font-weight:800;font-size:1.1rem;color:var(--brand-green-leaf);pointer-events:none;text-shadow:0 0 10px var(--c-accent-glow);animation:ppop 1.5s cubic-bezier(0.22,1,0.36,1) forwards;}
-@keyframes ppop{0%{opacity:1;transform:translateY(0) scale(.8);}20%{opacity:1;transform:translateY(-12px) scale(1.35);}100%{opacity:0;transform:translateY(-64px) scale(1);}}
-
-/* ── SETTINGS ── */
-.setting-group{background:var(--c-surface-low);border-radius:var(--radius-lg);padding:14px;margin-bottom:14px;border:1px solid rgba(255,255,255,.03);border-left:3px solid rgba(118,184,42,.2);transition:border-left-color .3s ease;}
-.setting-group:hover{border-left-color:var(--brand-green-leaf);}
-.setting-group-label{font-size:.68rem;font-weight:700;color:var(--c-on-surface-variant);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
-.setting-group-label .material-symbols-outlined{font-size:14px;color:var(--brand-green-leaf);}
-.setting-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:6px 8px;border-radius:var(--radius-md);transition:background var(--tr);}
-.setting-row:hover{background:rgba(118,184,42,.04);}
-.setting-row:last-child{margin-bottom:0;}
-.setting-row-label p:first-child{font-size:.84rem;font-weight:600;}
-.setting-row-label p:last-child{font-size:.68rem;color:var(--c-on-surface-variant);}
-
-/* ── LOYALTY STREAK CIRCLE ── */
-.loyalty-container{position:relative;width:140px;height:140px;margin:20px auto;display:flex;align-items:center;justify-content:center;}
-.loyalty-svg{transform:rotate(-90deg);position:absolute;}
-.loyalty-bg{fill:none;stroke:var(--brand-green-forest);stroke-width:10;opacity:.3;}
-.loyalty-fill{fill:none;stroke:var(--brand-green-leaf);stroke-width:10;stroke-linecap:round;stroke-dasharray:283;stroke-dashoffset:283;transition:stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1);}
-.streak-info{text-align:center;z-index:1;}
-.streak-info h3{font-family:var(--font-display);font-size:2rem;color:var(--brand-green-leaf);margin:0;}
-.streak-info p{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c-on-surface-variant);margin:0;}
-
-/* ── TYPING INDICATOR ── */
-.typing-dot{width:6px;height:6px;border-radius:50%;background:var(--c-on-surface-variant);display:inline-block;animation:typingBounce 1.2s ease-in-out infinite;}
-.typing-dot:nth-child(2){animation-delay:.2s;}
-.typing-dot:nth-child(3){animation-delay:.4s;}
-@keyframes typingBounce{0%,80%,100%{transform:scale(.6);opacity:.4;}40%{transform:scale(1);opacity:1;}}
-
-/* ── SCROLL REVEAL ── */
-.reveal{opacity:0;transform:translateY(18px);transition:opacity .45s ease,transform .45s cubic-bezier(0.22,1,0.36,1);}
-.reveal.visible{opacity:1;transform:translateY(0);}
-
-/* ── CHIP PRESS ── */
-.chip:active{transform:scale(.92);}
-.chip.active{background:var(--c-primary);color:var(--c-on-primary);box-shadow:0 3px 10px var(--c-accent-glow);}
-
-/* ── LEADERBOARD ROW ── */
-.lb-row:hover{background:var(--c-surface-highest);border-left-color:var(--c-primary);transform:translateX(3px);}
-.lb-row:active{transform:scale(.99);}
-
-/* ── MINI PLAY SPRING ── */
-.mini-play:hover{transform:scale(1.1);}
-.mini-play:active{transform:scale(.88);}
-
-/* ── PLAYER ACTION BUTTONS ── */
-.p-act-btn:hover{color:var(--c-primary);}
-.p-act-btn:active{transform:scale(.88);}
-.ctrl-btn:active{transform:scale(.84);}
-
-/* ── ACHIEVEMENT CARDS ── */
-.ach-card{border-radius:var(--radius-lg);padding:14px;background:var(--c-surface-low);border:1px solid rgba(255,255,255,.04);position:relative;overflow:hidden;margin-bottom:8px;transition:border-color var(--tr),transform var(--tr);}
-.ach-card:hover{border-color:rgba(118,184,42,.2);}
-
-/* ── RC REMIND BTN ── */
-.rc-remind-btn{font-size:.62rem;font-weight:700;padding:4px 10px;border-radius:var(--radius-full);background:rgba(118,184,42,.1);color:var(--c-tertiary);border:1px solid rgba(118,184,42,.2);transition:background var(--tr),transform var(--tr);flex-shrink:0;}
-.rc-remind-btn:hover{background:rgba(118,184,42,.2);}
-.rc-remind-btn:active{transform:scale(.92);}
-.rc-remind-btn.set{background:rgba(118,184,42,.2);border-color:var(--brand-green-leaf);}
-
-/* ── PODIUM HOVER ── */
-.ps{flex:1;display:flex;flex-direction:column;align-items:center;transition:transform .3s cubic-bezier(0.34,1.56,0.64,1);}
-.ps:hover{transform:translateY(-4px);}
-.ps.first{order:2;transform:scale(1.1);z-index:2;}
-.ps.first:hover{transform:scale(1.13) translateY(-4px);}
-
-@media(min-width:768px){.screen{padding:0 18px;}.player-art{width:240px;height:240px;}.vault-grid{grid-template-columns:1fr 1fr 1fr;}.vault-card.featured{grid-column:auto;}}
-
-/* ── WAVE BAR: controlled by playing state ── */
-.wave-bar{height:4px;transition:height 0.3s ease;}
-.now-on-air.playing .wave-bar{animation:wave 0.6s ease-in-out infinite alternate;}
-</style>
+<script src="js/player.js" defer></script>
+<script>
+const MARKET_ITEMS = [
+    { name: 'The Pulse Hoodie', price: 6000, img: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=400&q=80' },
+    { name: 'Official Cap', price: 1300, img: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=400&q=80' },
+    { name: '100 KES Airtime', price: 200, img: 'https://images.unsplash.com/photo-1616077168079-7e09a677fb2c?auto=format&fit=crop&w=400&q=80' }
+];
+// triggerInfernoMode / triggerInfernoFlare are now fully implemented in app.js (v8)
+</script>
+<script src="js/app.js" defer></script>
 </head>
 <body>
 
-<!-- TOP NAV -->
+<!-- ═══════════════════════ TOP NAV ═══════════════════════ -->
 <nav id="top-nav">
   <img src="amaica_logo-removebg-preview (1).png" alt="Amaica Media" class="logo-img" onclick="navigateTo('home')" style="height:38px;width:auto;filter:drop-shadow(0 0 5px rgba(0,0,0,0.5));cursor:pointer;">
   <div class="nav-actions">
     <div class="theme-pill">
-      <button id="theme-ember" class="active" onclick="setTheme('ember')"><span class="material-symbols-outlined" style="font-size:12px;vertical-align:middle;">dark_mode</span> Forest</button>
-      <button id="theme-cyan" onclick="setTheme('cyan')"><span class="material-symbols-outlined" style="font-size:12px;vertical-align:middle;">light_mode</span> Native</button>
+      <button id="theme-ember" class="active" onclick="setTheme('ember')"><span class="material-symbols-outlined" style="font-size:12px;vertical-align:middle;">local_fire_department</span> Ember</button>
+      <button id="theme-cyan"  onclick="setTheme('cyan')"><span class="material-symbols-outlined" style="font-size:12px;vertical-align:middle;">forest</span> Forest</button>
     </div>
-    <button class="icon-btn" onclick="navigateTo('events')" title="Events"><span class="material-symbols-outlined">event</span></button>
+    <button class="icon-btn" onclick="navigateTo('events')"   title="Events"><span class="material-symbols-outlined">event</span></button>
     <button class="icon-btn" onclick="navigateTo('settings')" title="Settings"><span class="material-symbols-outlined">settings</span></button>
   </div>
 </nav>
 
+<!-- ═══════════════════════ MAIN ═══════════════════════════ -->
 <div id="main-content">
 
-<!-- ══════════════════════════════════════════
-     HOME SCREEN
-══════════════════════════════════════════ -->
+<!-- ════════ HOME ════════ -->
 <div id="screen-home" class="screen active">
-  <div id="sb-status"><strong>Backend not yet connected.</strong> Replace <code>YOUR_SUPABASE_URL</code> and <code>YOUR_SUPABASE_ANON_KEY</code> in the script block with values from <strong>supabase.com → Settings → API</strong>.</div>
 
-  <!-- NOW ON AIR -->
-  <div class="now-on-air">
+  <!-- HERO: Now On Air -->
+  <div class="now-on-air" id="now-on-air-card">
     <div class="noa-glow"></div>
-    <div class="noa-wave-bg" id="hero-wave-bg"></div>
+    <div id="hero-wave-bg" class="noa-wave-bg"></div>
     <div class="noa-top">
-      <div class="live-badge"><span class="live-dot pulse-dot"></span>Live Now</div>
+      <div class="live-badge"><span class="live-dot"></span>Live · 98.7 FM</div>
       <div class="listeners-pill">
         <span class="material-symbols-outlined" style="font-size:12px;">headphones</span>
-        <span id="listener-count">1,247</span> listening
+        <span id="listener-count" class="listener-count-el">—</span>
       </div>
     </div>
     <div class="noa-body">
@@ -687,141 +75,99 @@ button{font-family:inherit;cursor:pointer;}
         <span class="material-symbols-outlined">radio</span>
       </div>
       <div class="noa-info">
-        <p class="noa-eyebrow">Now Airing · 98.7 FM</p>
-        <h2 class="noa-title" id="hero-show-title">The Midnight Pulse</h2>
-        <p class="noa-host" id="hero-show-host">with DJ Echo</p>
+        <p class="noa-eyebrow">NOW ON AIR</p>
+        <h2 class="noa-title" id="hero-show-title">Amaica Media</h2>
+        <p class="noa-host"  id="hero-show-host">98.7 FM · Live</p>
         <div class="noa-actions">
-          <button class="btn-primary" onclick="handleListenNow()">
-            <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1;">play_arrow</span>
-            Listen
-          </button>
-          <button class="btn-secondary" onclick="navigateTo('community')" style="padding:8px 13px;font-size:.74rem;">
-            <span class="material-symbols-outlined" style="font-size:13px;">forum</span>
-            Live Chat
-          </button>
+          <button class="btn-primary" onclick="handleListenNow()"><span class="material-symbols-outlined" style="font-size:14px;">play_arrow</span>Listen Now</button>
+          <div class="pulse-dot" style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.2);margin-left:4px;"></div>
+          <span id="player-status" style="font-size:.65rem;color:var(--c-on-surface-variant);">98.7 FM — Tap to play</span>
         </div>
       </div>
     </div>
-    <div class="noa-bar"><div class="noa-bar-fill live-stream" id="noa-bar-fill"></div></div>
+    <div class="noa-bar"><div class="noa-bar-fill" id="noa-bar-fill"></div></div>
     <div class="next-up-strip">
       <span class="nu-badge">Next Up</span>
-      <span class="nu-label"><strong>Breakfast with Sonia B.</strong> · 6:00 AM</span>
-    </div>
-
-  </div>
-
-  <!-- AD SLOT -->
-  <div class="ad-slot">
-    <span class="ad-label">Advertisement</span>
-    <div class="ad-placeholder" style="min-height:80px;">
-      <div class="ad-box" style="width:90%;height:70px;">AdSense Banner — Insert publisher tag here</div>
+      <span class="nu-label"><strong>Loading…</strong></span>
     </div>
   </div>
 
-  <!-- DAILY DROPS -->
+  <!-- FIRE METER -->
+  <div class="fire-meter-wrap" style="margin:12px auto;">
+    <div class="fire-meter-bg">
+      <div id="fire-fill" class="fire-meter-fill"></div>
+    </div>
+    <span class="fire-meter-label">Community Heat: <span id="fire-val">0</span>%</span>
+  </div>
+
+  <!-- PEAK LISTENERS + MINI CHART -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px 4px;gap:12px;">
+    <span style="font-size:.68rem;color:var(--c-on-surface-variant);font-weight:600;">
+      Peak: <span id="peak-count" style="color:var(--brand-green-leaf);font-weight:800;">0</span>
+    </span>
+    <canvas id="listenersChart" height="36" style="flex:1;max-width:200px;display:block;"></canvas>
+  </div>
+
+  <!-- POINTS PILL -->
+  <div style="display:flex;justify-content:center;gap:20px;margin-bottom:18px;">
+    <div style="text-align:center;">
+      <span id="listener-count-home" class="listener-count-el" style="display:block;font-weight:800;font-size:1rem;">—</span>
+      <span style="font-size:9px;opacity:.5;text-transform:uppercase;">Listeners</span>
+    </div>
+    <div style="text-align:center;">
+      <span id="points-display" style="display:block;font-weight:800;font-size:1rem;color:var(--brand-green-leaf);">1,240</span>
+      <span style="font-size:9px;opacity:.5;text-transform:uppercase;">Points</span>
+    </div>
+  </div>
+
+  <!-- UPCOMING SHOWS -->
   <div class="home-section">
     <div class="home-section-hdr">
-      <span class="section-label">Today's Drops</span>
-      <button class="btn-ghost" onclick="showToast('Coming soon','explore')">See all</button>
+      <span class="section-label">UPCOMING</span>
     </div>
-    <div class="content-reel no-scrollbar">
-      <div class="content-card" onclick="sbEarnPoints(15,'Played replay');showToast('Playing replay…','play_circle')">
-        <div class="cc-thumb" style="background:linear-gradient(140deg,#1a0800,#3a1200);">🎙️<div class="cc-play-overlay"><span class="material-symbols-outlined">play_circle</span></div></div>
-        <div class="cc-body"><p class="cc-type">Replay</p><p class="cc-title">Breakfast Show Full Episode</p><p class="cc-meta">48 min · Today</p></div>
-      </div>
-      <div class="content-card" onclick="sbEarnPoints(10,'Played clip');showToast('Playing clip…','play_circle')">
-        <div class="cc-thumb" style="background:linear-gradient(140deg,#001412,#002e28);">🎧<div class="cc-play-overlay"><span class="material-symbols-outlined">play_circle</span></div></div>
-        <div class="cc-body"><p class="cc-type">Behind the Mic</p><p class="cc-title">DJ Echo's pre-show ritual</p><p class="cc-meta">4 min · Exclusive</p></div>
-      </div>
-      <div class="content-card cc-shoutout" onclick="sbEarnPoints(10,'Heard shoutout');showToast('Playing shoutout…','favorite')">
-        <div class="cc-thumb" style="background:linear-gradient(140deg,#100018,#200038);">📣<div class="cc-play-overlay"><span class="material-symbols-outlined">play_circle</span></div></div>
-        <div class="cc-body"><p class="cc-type" style="color:var(--c-tertiary);">Shoutout</p><p class="cc-title">Happy birthday Amara K.!</p><p class="cc-meta">On-air · 9:42 PM</p></div>
-      </div>
-      <div class="content-card" onclick="sbEarnPoints(15,'Played interview');showToast('Playing interview…','play_circle')">
-        <div class="cc-thumb" style="background:linear-gradient(140deg,#180010,#360024);">🌟<div class="cc-play-overlay"><span class="material-symbols-outlined">play_circle</span></div></div>
-        <div class="cc-body"><p class="cc-type">Interview</p><p class="cc-title">Luna on Caribbean sound's global rise</p><p class="cc-meta">22 min · New</p></div>
-      </div>
-      <div class="content-card" onclick="sbEarnPoints(15,'Played replay');showToast('Playing replay…','play_circle')">
-        <div class="cc-thumb" style="background:linear-gradient(140deg,#081200,#182800);">🎵<div class="cc-play-overlay"><span class="material-symbols-outlined">play_circle</span></div></div>
-        <div class="cc-body"><p class="cc-type">Replay</p><p class="cc-title">Acoustic Sunset Set — Live Jam</p><p class="cc-meta">31 min · Yesterday</p></div>
-      </div>
+    <div id="rc-shows-list" style="display:flex;flex-direction:column;gap:6px;">
+      <div class="rc-show-row"><span class="rc-time">—</span><div class="rc-show-info"><p class="rc-show-name">Loading schedule…</p></div></div>
     </div>
   </div>
 
-  <!-- LIVE COMMUNITY PREVIEW -->
+  <!-- FEED (dynamic via admin) -->
   <div class="home-section">
     <div class="home-section-hdr">
-      <span class="section-label" style="display:flex;align-items:center;gap:6px;"><span class="chat-live-dot"></span>Live Chat</span>
-      <button class="btn-ghost" onclick="navigateTo('community')">Join →</button>
+      <span class="section-label">THE FEED</span>
     </div>
+    <div id="minimal-feed" class="feed-grid"></div>
+  </div>
+
+  <!-- QUICK CHAT -->
+  <div class="home-section">
     <div class="chat-preview-wrap">
+      <div class="chat-preview-header">
+        <span class="chat-preview-title"><span class="chat-live-dot"></span>Live Chat</span>
+        <button class="btn-ghost" onclick="navigateTo('community')">Open →</button>
+      </div>
       <div class="chat-preview-msgs" id="home-chat-preview">
-        <div class="cpm"><div class="cpm-av">M</div><div class="cpm-body"><p class="cpm-user">Marcus R.</p><p class="cpm-text">DJ Echo is absolutely fire tonight 🔥</p></div></div>
-        <div class="cpm"><div class="cpm-av">E</div><div class="cpm-body"><p class="cpm-user">Elena V.</p><p class="cpm-text">Been tuned in for 2 hours. Can't leave!</p></div></div>
-        <div class="cpm"><div class="cpm-av">J</div><div class="cpm-body"><p class="cpm-user">J. Aris</p><p class="cpm-text">Who's calling in next? 👀</p></div></div>
+        <div class="cpm"><div class="cpm-av">M</div><div class="cpm-body"><p class="cpm-user">Marcus R.</p><p class="cpm-text">DJ Echo is fire tonight 🔥</p></div></div>
+        <div class="cpm"><div class="cpm-av">E</div><div class="cpm-body"><p class="cpm-user">Elena V.</p><p class="cpm-text">Been tuned in for hours. Can't leave!</p></div></div>
       </div>
       <div class="chat-cta">
-        <input class="chat-cta-input" id="home-chat-input" type="text" placeholder="Say something to the stream…" onkeydown="if(event.key==='Enter')homeQuickChat()"/>
+        <input class="chat-cta-input" id="home-chat-input" type="text" placeholder="Say something…" onkeydown="if(event.key==='Enter')homeQuickChat()"/>
         <button class="chat-cta-btn" onclick="homeQuickChat()"><span class="material-symbols-outlined" style="font-size:16px;">send</span></button>
       </div>
     </div>
   </div>
 
-  <!-- VAULT -->
-  <div class="home-section">
-    <div class="home-section-hdr">
-      <span class="section-label">The Vault</span>
-      <button class="btn-ghost">Explore</button>
-    </div>
-    <div class="vault-grid">
-      <div class="vault-card featured" onclick="sbEarnPoints(15,'Viewed exclusive');showToast('Loading exclusive…','lock_open')">
-        <div class="vc-thumb" style="background:linear-gradient(140deg,#1a0800,#3d1200);font-size:2rem;">🎤<div class="vc-lock"><span class="material-symbols-outlined">lock_open</span></div></div>
-        <div class="vc-body"><span class="vc-tag exclusive">Exclusive</span><p class="vc-title">Rising Artist Takeover — full uncut session with three breakout acts</p><p class="vc-meta">1h 12min · Amaica Media</p></div>
-      </div>
-      <div class="vault-card" onclick="sbEarnPoints(10,'Viewed replay');showToast('Loading replay…','play_circle')">
-        <div class="vc-thumb" style="background:linear-gradient(140deg,#001412,#002e28);font-size:1.6rem;">📻</div>
-        <div class="vc-body"><span class="vc-tag replay">Replay</span><p class="vc-title">The Vinyl Debate — Hot Take segment</p><p class="vc-meta">18 min</p></div>
-      </div>
-      <div class="vault-card" onclick="sbEarnPoints(10,'Viewed interview');showToast('Loading interview…','play_circle')">
-        <div class="vc-thumb" style="background:linear-gradient(140deg,#181200,#302800);font-size:1.6rem;">🌙</div>
-        <div class="vc-body"><span class="vc-tag interview">Interview</span><p class="vc-title">Meeting legend Sol — backstage chat</p><p class="vc-meta">34 min</p></div>
-      </div>
-    </div>
+  <div class="ad-slot" style="margin-top:24px;margin-bottom:18px;">
+    <span class="ad-label">Advertisement</span>
+    <div class="ad-placeholder" style="min-height:80px;"><div class="ad-box" style="width:90%;height:70px;">AdSense Banner — Insert publisher tag here</div></div>
   </div>
-
-  <!-- TOMORROW'S PROGRAMME -->
-  <div class="return-card">
-    <p class="rc-eyebrow" id="rc-eyebrow">Up Next</p>
-    <p class="rc-title" id="rc-title">Coming Up on Air</p>
-    <p class="rc-desc">Set a reminder — never miss your show.</p>
-    <div class="rc-shows" id="rc-shows-list">
-      <!-- populated by syncScheduleUI() -->
-      <div class="rc-show-row"><span class="rc-time">—</span><div class="rc-show-info"><p class="rc-show-name">Loading schedule…</p><p class="rc-show-host">Amaica Media 98.7 FM</p></div></div>
-    </div>
-    <button class="btn-secondary" style="width:100%;justify-content:center;font-size:.76rem;" onclick="navigateTo('events')"><span class="material-symbols-outlined" style="font-size:14px;">calendar_month</span>Full Schedule</button>
-  </div>
-
-  <!-- PULSE FEED -->
-  <div class="home-section" style="margin-top:18px;">
-    <div class="home-section-hdr"><span class="section-label">The Pulse Feed</span></div>
-    <div class="feed-grid">
-      <article class="feed-card"><span class="fc-tag">Trending</span><h3 class="fc-title">Amaica Festival 2024 — first artists announced</h3><p class="fc-body">Three stages, digital experience, biggest regional showcase yet.</p><div class="fc-footer"><button class="btn-ghost" style="font-size:.6rem;padding:0;" onclick="sbEarnPoints(15,'Read article')">Read →</button><span class="fc-time" style="margin-left:auto;">2h ago</span></div></article>
-      <article class="feed-card"><span class="fc-tag accent">Interview</span><h3 class="fc-title">DJ Echo on Caribbean electronic music's global rise</h3><p class="fc-body">Dancehall, soca and afrobeats reshaping club culture worldwide.</p><div class="fc-footer"><button class="btn-ghost" style="font-size:.6rem;padding:0;" onclick="sbEarnPoints(15,'Read article')">Read →</button><span class="fc-time" style="margin-left:auto;">5h ago</span></div></article>
-      <article class="feed-card"><span class="fc-tag">Community</span><h3 class="fc-title">Win VIP tickets — Super Fan weekend challenge</h3><p class="fc-body">Top listener Saturday earns 2 VIP passes + backstage access.</p><div class="fc-footer"><button class="btn-ghost" style="font-size:.6rem;padding:0;" onclick="navigateTo('rewards')">Join →</button><span class="fc-time" style="margin-left:auto;">1d ago</span></div></article>
-      <article class="feed-card"><span class="fc-tag live">Live</span><h3 class="fc-title">Carnival road march — ground coverage now</h3><p class="fc-body">Reporters on the ground. Real-time interviews and updates.</p><div class="fc-footer"><button class="btn-ghost" style="font-size:.6rem;padding:0;" onclick="navigateTo('events')">Follow →</button><span class="fc-time" style="margin-left:auto;">Now</span></div></article>
-    </div>
-  </div>
-
-  <div class="ad-slot" style="margin-bottom:18px;"><span class="ad-label">Advertisement</span><div class="ad-placeholder" style="min-height:258px;"><div class="ad-box" style="width:300px;height:250px;">AdSense 300×250</div></div></div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     PLAYER SCREEN
-══════════════════════════════════════════ -->
+<!-- ════════ PLAYER ════════ -->
 <div id="screen-player" class="screen">
-  <div class="pb-blob blob-1"></div><div class="pb-blob blob-2"></div>
+  <div class="pb-blob blob-1"></div>
+  <div class="pb-blob blob-2"></div>
   <div class="player-full">
-    <div class="player-art">
+    <div class="player-art" id="player-art">
       <div class="player-art-glow" id="player-art-glow"></div>
       <div class="vinyl-grooves"></div>
       <div class="vinyl-label">
@@ -832,9 +178,13 @@ button{font-family:inherit;cursor:pointer;}
       <div style="display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:7px;">
         <div class="live-badge"><span class="live-dot"></span>Live</div>
         <span style="font-size:.64rem;color:var(--c-on-surface-variant);">98.7 FM · Amaica Media</span>
+        <div class="listeners-pill">
+          <span class="material-symbols-outlined" style="font-size:12px;">headphones</span>
+          <span id="player-listener-count" class="listener-count-el">—</span> listening
+        </div>
       </div>
-      <h2 class="player-title" id="player-show-title">The Midnight Pulse with DJ Echo</h2>
-      <p class="player-host" id="player-show-host">DJ Echo</p>
+      <h2 class="player-title" id="player-show-title">Amaica Media 98.7 FM</h2>
+      <p class="player-host"  id="player-show-host">98.7 FM</p>
     </div>
     <div style="width:100%;">
       <div class="tl-bar"><div class="tl-fill"></div></div>
@@ -843,7 +193,14 @@ button{font-family:inherit;cursor:pointer;}
     <div class="p-controls">
       <button class="ctrl-btn" onclick="showToast('Shuffle','shuffle')"><span class="material-symbols-outlined">shuffle</span></button>
       <button class="ctrl-btn" style="color:var(--c-on-surface);" onclick="showToast('Previous show','skip_previous')"><span class="material-symbols-outlined" style="font-size:28px;">skip_previous</span></button>
-      <button class="play-main" id="play-btn" onclick="toggleRadio()"><span class="material-symbols-outlined">play_arrow</span></button>
+      <div class="orb-wrap" onclick="toggleRadio()">
+        <div class="orb-aura" id="streak-aura"></div>
+        <div class="orb-ripple"></div>
+        <div class="orb-ring"></div>
+        <button class="orb-btn" id="main-orb-btn">
+          <span class="material-symbols-outlined" id="orb-icon">play_arrow</span>
+        </button>
+      </div>
       <button class="ctrl-btn" style="color:var(--c-on-surface);" onclick="showToast('Next show','skip_next')"><span class="material-symbols-outlined" style="font-size:28px;">skip_next</span></button>
       <button class="ctrl-btn" onclick="showToast('Repeat','repeat')"><span class="material-symbols-outlined">repeat</span></button>
     </div>
@@ -852,6 +209,7 @@ button{font-family:inherit;cursor:pointer;}
       <input type="range" class="vol-slider" min="0" max="100" value="80" oninput="setVolume(this.value)"/>
       <span class="material-symbols-outlined">volume_up</span>
     </div>
+    <!-- Connection status — shows connecting / connected / stopped -->
     <div id="player-status-bar">Tap play to start streaming</div>
     <div class="p-actions">
       <button class="p-act-btn" onclick="sbEarnPoints(10,'Liked show')"><span class="material-symbols-outlined">favorite</span><span>Like</span></button>
@@ -863,9 +221,7 @@ button{font-family:inherit;cursor:pointer;}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     COMMUNITY SCREEN
-══════════════════════════════════════════ -->
+<!-- ════════ COMMUNITY ════════ -->
 <div id="screen-community" class="screen">
   <h1 class="screen-title">COMMUNITY</h1>
   <p class="screen-sub">Chat live. Earn <strong style="color:var(--c-primary);">+5 pts</strong> per message during shows.</p>
@@ -873,7 +229,6 @@ button{font-family:inherit;cursor:pointer;}
     <button class="chip active" onclick="setChip(this,'chat-filters')">Live Chat</button>
     <button class="chip" onclick="setChip(this,'chat-filters')">Call-In</button>
     <button class="chip" onclick="setChip(this,'chat-filters')">Polls</button>
-    <button class="chip" onclick="setChip(this,'chat-filters')">Groups</button>
   </div>
   <div class="chat-wrap">
     <div class="chat-msgs no-scrollbar" id="chat-messages"></div>
@@ -884,9 +239,7 @@ button{font-family:inherit;cursor:pointer;}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     REWARDS SCREEN
-══════════════════════════════════════════ -->
+<!-- ════════ REWARDS ════════ -->
 <div id="screen-rewards" class="screen">
   <div class="chip-row" id="rewards-nav" style="margin-top:14px;">
     <button class="chip active" onclick="setChip(this,'rewards-nav');showRSec('points')">Points</button>
@@ -894,32 +247,38 @@ button{font-family:inherit;cursor:pointer;}
     <button class="chip" onclick="setChip(this,'rewards-nav');showRSec('perks')">Perks</button>
     <button class="chip" onclick="setChip(this,'rewards-nav');showRSec('refer')">Refer</button>
   </div>
+
+  <!-- Points section -->
   <div id="r-points">
     <div class="pts-hero">
       <p style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:var(--c-on-surface-variant);">Your Balance</p>
-      <div class="pts-display"><span class="pts-num" id="points-display">1,240</span><span class="pts-lbl">Pulse Points</span></div>
-      <p id="tier-next-label" style="font-size:.72rem;color:var(--c-on-surface-variant);">Next: Gold at 2,000 pts</p>
-      <div style="height:4px;background:var(--c-surface-highest);border-radius:3px;margin-top:9px;overflow:hidden;"><div id="tier-progress-bar" style="height:100%;width:62%;background:linear-gradient(90deg,var(--c-primary),var(--c-primary-dim));border-radius:3px;"></div></div>
+      <div class="pts-display"><span class="pts-num" id="points-display-rwd">1,240</span><span class="pts-lbl">Pulse Points</span></div>
+      <p id="tier-next-label" style="font-size:.72rem;color:var(--c-on-surface-variant);">Next: Silver at 500 pts</p>
+      <div style="height:4px;background:var(--c-surface-highest);border-radius:3px;margin-top:9px;overflow:hidden;">
+        <div id="tier-progress-bar" style="height:100%;width:30%;background:linear-gradient(90deg,var(--c-primary),var(--c-primary-dim));border-radius:3px;"></div>
+      </div>
     </div>
     <div class="tier-row">
-      <span class="tier-badge" data-tier="bronze">Bronze</span>
+      <span class="tier-badge active" data-tier="bronze">Bronze</span>
       <span class="tier-badge" data-tier="silver">Silver</span>
-      <span class="tier-badge active" data-tier="gold">Gold</span>
+      <span class="tier-badge" data-tier="gold">Gold</span>
       <span class="tier-badge" data-tier="superfan">Super Fan</span>
     </div>
+    <!-- Missions -->
     <p style="font-family:var(--font-display);font-weight:800;font-size:.9rem;letter-spacing:-.01em;margin-bottom:10px;">Today's Missions</p>
     <div class="ach-card"><p class="ach-title">Listen for 30 min</p><p class="ach-desc">Tune in to any live show continuously</p><div class="prog-wrap"><div class="prog-fill" style="width:65%;"></div></div><div class="prog-labels"><span>20 / 30 min</span><span class="pts">+50 pts</span></div></div>
     <div class="ach-card"><p class="ach-title">Chat Contributor</p><p class="ach-desc">Send 5 messages in the live chat</p><div class="prog-wrap"><div class="prog-fill" id="chat-prog" style="width:40%;"></div></div><div class="prog-labels"><span id="chat-mission-lbl">2 / 5 messages</span><span class="pts">+25 pts</span></div></div>
     <div class="ach-card"><p class="ach-title">Refer a Friend</p><p class="ach-desc">Invite a new listener who joins</p><div class="prog-wrap"><div class="prog-fill" style="width:0%;"></div></div><div class="prog-labels"><span>0 / 1</span><span class="pts">+200 pts</span></div></div>
+    <!-- Dynamic rewards list from admin -->
     <p style="font-family:var(--font-display);font-weight:800;font-size:.9rem;letter-spacing:-.01em;margin:16px 0 10px;">Claim Rewards</p>
-    <div class="rwd-card" onclick="claimReward(500)"><div class="rwd-icon">🎟️</div><div class="rwd-info"><p class="rwd-name">VIP Event Ticket</p><p class="rwd-desc">Any Amaica-hosted event</p></div><div class="rwd-pts">500<small>points</small></div></div>
-    <div class="rwd-card" onclick="claimReward(2500)"><div class="rwd-icon">🎧</div><div class="rwd-info"><p class="rwd-name">Wireless Headphones</p><p class="rwd-desc">Echo-Series, free shipping</p></div><div class="rwd-pts">2,500<small>points</small></div></div>
-    <div class="rwd-card" onclick="claimReward(100)"><div class="rwd-icon">☕</div><div class="rwd-info"><p class="rwd-name">Local Coffee Voucher</p><p class="rwd-desc">Partner café — any drink</p></div><div class="rwd-pts">100<small>points</small></div></div>
+    <div id="rewards-list-dynamic"></div>
   </div>
+
+  <!-- Leaderboard section -->
   <div id="r-leaderboard" style="display:none;">
     <h1 class="screen-title" style="margin-top:10px;">COMMUNITY <span style="color:var(--c-primary);font-style:italic;">ELITES</span></h1>
     <p class="screen-sub">Top voices on Amaica Media — live rankings.</p>
-    <button class="btn-secondary" onclick="loadLeaderboard()" style="margin-bottom:14px;font-size:.7rem;padding:7px 14px;"><span class="material-symbols-outlined" style="font-size:13px;">refresh</span>Refresh Rankings</button>
+    <button class="btn-secondary" onclick="loadLeaderboard()" style="margin-bottom:14px;font-size:.7rem;padding:7px 14px;"><span class="material-symbols-outlined" style="font-size:13px;">refresh</span>Refresh</button>
     <div class="podium">
       <div class="ps second"><div class="pav">E<span class="prank">2</span></div><p class="pname">Elena V.</p><p class="ppts">12.4k</p><div class="pbar"></div></div>
       <div class="ps first"><div class="pav">M<span class="prank">1</span></div><p class="pname">Marcus R.</p><p class="ppts">18.9k</p><div class="pbar"></div></div>
@@ -931,6 +290,8 @@ button{font-family:inherit;cursor:pointer;}
       <div style="display:flex;align-items:center;gap:9px;"><span style="font-family:var(--font-display);font-size:1.2rem;font-weight:800;color:var(--c-on-surface-variant);">#24</span><div class="lb-av">Y</div><div style="flex:1;"><p style="font-weight:700;font-size:.82rem;" id="profile-username">Listener</p><p style="font-size:.66rem;color:var(--c-on-surface-variant);">Keep listening to climb!</p></div><span style="font-family:var(--font-display);font-weight:800;color:var(--c-primary);" id="lb-your-pts">1,240 pts</span></div>
     </div>
   </div>
+
+  <!-- Perks section -->
   <div id="r-perks" style="display:none;">
     <h1 class="screen-title" style="margin-top:10px;">Listener <span style="color:var(--c-primary);">Perks</span></h1>
     <p class="screen-sub">Exclusive discounts for our community.</p>
@@ -940,8 +301,48 @@ button{font-family:inherit;cursor:pointer;}
       <div class="perk-card"><div style="height:90px;background:linear-gradient(135deg,#180010,#340024);display:flex;align-items:center;justify-content:center;font-size:2rem;">🎤</div><div class="perk-inner"><span class="perk-disc">VIP</span><p class="perk-name">Backstage Access</p><p class="perk-partner">Summer Jazz 2024</p><button class="claim-btn" onclick="showToast('Entered raffle! 🎉','celebration')">Raffle</button></div></div>
       <div class="perk-card"><div style="height:90px;background:linear-gradient(135deg,#001414,#002e2e);display:flex;align-items:center;justify-content:center;font-size:2rem;">☕</div><div class="perk-inner"><span class="perk-disc">FREE</span><p class="perk-name">Morning Brew</p><p class="perk-partner">Local Cafés</p><button class="claim-btn" onclick="showToast('Perk claimed! 🎉','celebration')">Claim</button></div></div>
     </div>
+
+    <!-- ── STREAK FREEZE ── -->
+    <div class="ach-card" style="margin-top:20px;border-left:3px solid var(--c-primary);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <span style="font-size:1.6rem;">❄️</span>
+        <div style="flex:1;">
+          <p class="ach-title">Streak Freeze</p>
+          <p class="ach-desc">Protect your daily streak if you miss a day — costs 500 pts</p>
+        </div>
+      </div>
+      <button id="freeze-btn" class="btn-primary" style="width:100%;justify-content:center;font-size:.8rem;" onclick="buyStreakFreeze()">
+        <span class="material-symbols-outlined" style="font-size:14px;">ac_unit</span>Buy Streak Freeze — 500 pts
+      </button>
+    </div>
+
+    <!-- ── GEAR REWARDS STORE ── -->
+    <div style="margin-top:20px;">
+      <div class="section-hdr" style="margin-bottom:12px;">
+        <span class="section-label" style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--c-on-surface-variant);">Amaica Gear Store</span>
+        <span style="font-size:.6rem;color:var(--c-primary);font-weight:800;">PTS + REFERRALS</span>
+      </div>
+      <div id="gear-grid"></div>
+    </div>
+
+    <!-- ── SECRET STREAK REWARD (hidden until streak ≥ 7) ── -->
+    <div id="secret-streak-reward" class="ach-card" style="display:none;margin-top:16px;background:linear-gradient(135deg,rgba(232,65,24,0.1),rgba(251,197,49,0.08));border:1px solid rgba(232,65,24,0.3);">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:2rem;">🏆</span>
+        <div>
+          <p class="ach-title" style="color:var(--c-primary);">7-Day Hero Unlocked!</p>
+          <p class="ach-desc">You've hit a 7-day streak — you're a true Pulse legend. Exclusive badge incoming.</p>
+        </div>
+      </div>
+      <button class="btn-primary" style="width:100%;justify-content:center;margin-top:12px;font-size:.8rem;" onclick="showToast('Hero badge on the way! 🏆','workspace_premium')">
+        <span class="material-symbols-outlined" style="font-size:14px;">workspace_premium</span>Claim Hero Badge
+      </button>
+    </div>
+
     <div class="ad-slot" style="margin-top:14px;"><span class="ad-label">Advertisement</span><div class="ad-placeholder" style="min-height:76px;"><div class="ad-box" style="width:90%;height:68px;">AdSense Banner · Perks Page</div></div></div>
   </div>
+
+  <!-- Refer section -->
   <div id="r-refer" style="display:none;">
     <h1 class="screen-title" style="margin-top:10px;">Refer &amp; <span style="color:var(--c-primary);">Earn</span></h1>
     <p class="screen-sub">Earn <strong style="color:var(--c-primary);">+200 pts</strong> for every new listener you bring.</p>
@@ -957,17 +358,23 @@ button{font-family:inherit;cursor:pointer;}
       <p class="ach-title" style="margin-bottom:6px;">Have a friend's code?</p>
       <div style="display:flex;gap:7px;"><input class="chat-input" id="ref-code-input" type="text" placeholder="Enter referral code…" style="border-radius:var(--radius-md);"/><button class="btn-primary" onclick="applyReferralCode(document.getElementById('ref-code-input').value)" style="padding:9px 14px;">Apply</button></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:16px;">
-      <div style="background:var(--c-surface-low);border-radius:var(--radius-md);padding:11px;text-align:center;"><p style="font-family:var(--font-display);font-size:1.3rem;font-weight:800;color:var(--c-primary);">3</p><p style="font-size:.58rem;color:var(--c-on-surface-variant);font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Referred</p></div>
-      <div style="background:var(--c-surface-low);border-radius:var(--radius-md);padding:11px;text-align:center;"><p style="font-family:var(--font-display);font-size:1.3rem;font-weight:800;color:var(--c-primary);">600</p><p style="font-size:.58rem;color:var(--c-on-surface-variant);font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Pts Earned</p></div>
-      <div style="background:var(--c-surface-low);border-radius:var(--radius-md);padding:11px;text-align:center;"><p style="font-family:var(--font-display);font-size:1.3rem;font-weight:800;color:var(--c-primary);">#7</p><p style="font-size:.58rem;color:var(--c-on-surface-variant);font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Ref. Rank</p></div>
+  </div>
+
+  <!-- Pulse Marketplace (dynamic via admin) -->
+  <div id="r-marketplace" style="margin-top:24px;">
+    <div class="section-hdr">
+      <span class="section-label">Pulse Marketplace</span>
+      <span style="font-size:10px;color:var(--c-primary);font-weight:800;">LIVE STOCK</span>
+    </div>
+    <div class="market-grid" id="market-grid"></div>
+    <div style="background:var(--c-surface-highest);border-radius:12px;padding:12px;margin-top:12px;">
+      <p style="font-size:11px;font-weight:700;color:var(--c-primary);">📍 Collection Info</p>
+      <p style="font-size:10px;opacity:0.7;">Physical merch available at Amaica Media Station, Kakamega. Show your redemption code to the receptionist.</p>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     EVENTS SCREEN
-══════════════════════════════════════════ -->
+<!-- ════════ EVENTS ════════ -->
 <div id="screen-events" class="screen">
   <h1 class="screen-title" style="margin-top:14px;">EVENTS</h1>
   <p class="screen-sub">Shows, meetups, and exclusive listener experiences.</p>
@@ -975,21 +382,18 @@ button{font-family:inherit;cursor:pointer;}
     <button class="chip active" onclick="setChip(this,'events-filters')">All</button>
     <button class="chip" onclick="setChip(this,'events-filters')">Live</button>
     <button class="chip" onclick="setChip(this,'events-filters')">Upcoming</button>
-    <button class="chip" onclick="setChip(this,'events-filters')">Rewards</button>
   </div>
   <div class="events-list">
-    <div class="ev-card" onclick="sbEarnPoints(10,'Viewed event')"><div class="ev-date"><span class="ev-month">Now</span><span class="ev-day" style="color:var(--c-live);font-size:.9rem;">LIVE</span><span class="ev-dow">On Air</span></div><div class="ev-info"><span class="ev-tag live">Live</span><p class="ev-title" id="ev-live-title">Amaica Media 98.7 FM</p><div class="ev-meta"><span>98.7 FM</span><span id="ev-listeners">1,247 listening</span></div></div></div>
-    <div class="ev-card" onclick="sbEarnPoints(10,'Viewed event')"><div class="ev-date"><span class="ev-month">Jul</span><span class="ev-day">14</span><span class="ev-dow">Sat</span></div><div class="ev-info"><span class="ev-tag upcoming">Upcoming</span> <span class="ev-tag reward">+100 pts</span><p class="ev-title">Amaica Festival 2024 — Live Broadcast</p><div class="ev-meta"><span>National Stadium</span><span>8:00 PM</span></div></div></div>
-    <div class="ev-card" onclick="sbEarnPoints(10,'Viewed event')"><div class="ev-date"><span class="ev-month">Jul</span><span class="ev-day">19</span><span class="ev-dow">Thu</span></div><div class="ev-info"><span class="ev-tag upcoming">Upcoming</span> <span class="ev-tag reward">VIP Giveaway</span><p class="ev-title">Super Fan Challenge — Win Backstage Passes</p><div class="ev-meta"><span>Top listeners compete</span><span>All day</span></div></div></div>
-    <div class="ev-card" onclick="sbEarnPoints(10,'Viewed event')"><div class="ev-date"><span class="ev-month">Jul</span><span class="ev-day">22</span><span class="ev-dow">Sun</span></div><div class="ev-info"><span class="ev-tag upcoming">Upcoming</span><p class="ev-title">Carnival Road March — Ground Coverage</p><div class="ev-meta"><span>City Centre</span><span>10 AM – 8 PM</span></div></div></div>
-    <div class="ev-card" onclick="sbEarnPoints(10,'Viewed event')"><div class="ev-date"><span class="ev-month">Jul</span><span class="ev-day">28</span><span class="ev-dow">Sat</span></div><div class="ev-info"><span class="ev-tag upcoming">Upcoming</span> <span class="ev-tag reward">+50 pts</span><p class="ev-title">Community Listener Meetup</p><div class="ev-meta"><span>TBA</span><span>5:00 PM</span></div></div></div>
+    <div class="ev-card"><div class="ev-date"><span class="ev-month">Now</span><span class="ev-day" style="color:var(--c-live);font-size:.9rem;">LIVE</span><span class="ev-dow">On Air</span></div><div class="ev-info"><span class="ev-tag live">Live</span><p class="ev-title" id="ev-live-title">Amaica Media 98.7 FM</p><div class="ev-meta"><span>98.7 FM</span><span id="ev-listeners">1,247 listening</span></div></div></div>
+    <div class="ev-card"><div class="ev-date"><span class="ev-month">Jul</span><span class="ev-day">14</span><span class="ev-dow">Sat</span></div><div class="ev-info"><span class="ev-tag upcoming">Upcoming</span><span class="ev-tag reward">+100 pts</span><p class="ev-title">Amaica Festival 2024 — Live Broadcast</p><div class="ev-meta"><span>National Stadium</span><span>8:00 PM</span></div></div></div>
+    <div class="ev-card"><div class="ev-date"><span class="ev-month">Jul</span><span class="ev-day">19</span><span class="ev-dow">Thu</span></div><div class="ev-info"><span class="ev-tag upcoming">Upcoming</span><span class="ev-tag reward">VIP Giveaway</span><p class="ev-title">Super Fan Challenge — Win Backstage Passes</p><div class="ev-meta"><span>Top listeners compete</span><span>All day</span></div></div></div>
+    <div class="ev-card"><div class="ev-date"><span class="ev-month">Jul</span><span class="ev-day">22</span><span class="ev-dow">Sun</span></div><div class="ev-info"><span class="ev-tag upcoming">Upcoming</span><p class="ev-title">Carnival Road March — Ground Coverage</p><div class="ev-meta"><span>City Centre</span><span>10 AM – 8 PM</span></div></div></div>
+    <div class="ev-card"><div class="ev-date"><span class="ev-month">Jul</span><span class="ev-day">28</span><span class="ev-dow">Sat</span></div><div class="ev-info"><span class="ev-tag upcoming">Upcoming</span><span class="ev-tag reward">+50 pts</span><p class="ev-title">Community Listener Meetup</p><div class="ev-meta"><span>TBA</span><span>5:00 PM</span></div></div></div>
   </div>
-  <div class="ad-slot" style="margin-top:14px;margin-bottom:8px;"><span class="ad-label">Advertisement</span><div class="ad-placeholder" style="min-height:76px;"><div class="ad-box" style="width:90%;height:68px;">AdSense Banner · Events Page</div></div></div>
+  <div class="ad-slot" style="margin-top:14px;"><span class="ad-label">Advertisement</span><div class="ad-placeholder" style="min-height:76px;"><div class="ad-box" style="width:90%;height:68px;">AdSense Banner · Events Page</div></div></div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     PROFILE SCREEN
-══════════════════════════════════════════ -->
+<!-- ════════ PROFILE ════════ -->
 <div id="screen-profile" class="screen">
   <h1 class="screen-title" style="margin-top:14px;">MY PROFILE</h1>
   <div style="background:linear-gradient(135deg,var(--brand-green-forest),var(--c-surface-low));border-radius:var(--radius-lg);padding:18px;margin-bottom:14px;text-align:center;">
@@ -1004,16 +408,12 @@ button{font-family:inherit;cursor:pointer;}
     <div style="background:var(--c-surface-low);border-radius:var(--radius-md);padding:11px;text-align:center;"><p style="font-family:var(--font-display);font-size:1.3rem;font-weight:800;color:var(--c-primary);" id="profile-chat">0</p><p style="font-size:.56rem;color:var(--c-on-surface-variant);font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Messages</p></div>
     <div style="background:var(--c-surface-low);border-radius:var(--radius-md);padding:11px;text-align:center;"><p style="font-family:var(--font-display);font-size:1.3rem;font-weight:800;color:var(--c-primary);" id="profile-listen-mins">0</p><p style="font-size:.56rem;color:var(--c-on-surface-variant);font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Mins Listened</p></div>
   </div>
-  <!-- Loyalty Streak Circle -->
   <div class="loyalty-container">
     <svg class="loyalty-svg" width="140" height="140" viewBox="0 0 140 140">
       <circle class="loyalty-bg" cx="70" cy="70" r="45"></circle>
       <circle id="loyalty-progress" class="loyalty-fill" cx="70" cy="70" r="45"></circle>
     </svg>
-    <div class="streak-info">
-      <h3 id="streak-num">0</h3>
-      <p>Day Streak</p>
-    </div>
+    <div class="streak-info"><h3 id="streak-num">0</h3><p>Day Streak</p></div>
   </div>
   <div id="username-editor" style="background:var(--c-surface-low);border-radius:var(--radius-md);padding:12px;margin-bottom:14px;">
     <p style="font-size:.7rem;font-weight:700;color:var(--c-on-surface-variant);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Your Listener Name</p>
@@ -1039,26 +439,14 @@ button{font-family:inherit;cursor:pointer;}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     SETTINGS SCREEN
-══════════════════════════════════════════ -->
+<!-- ════════ SETTINGS ════════ -->
 <div id="screen-settings" class="screen">
   <h1 class="screen-title" style="margin-top:14px;">SETTINGS</h1>
   <p class="screen-sub">Customise your listening experience.</p>
   <div class="setting-group">
     <p class="setting-group-label"><span class="material-symbols-outlined">graphic_eq</span>Stream</p>
-    <div class="setting-row">
-      <div class="setting-row-label"><p>Quality</p><p>Auto adjusts to your connection</p></div>
-      <div style="display:flex;gap:5px;" id="quality-chips">
-        <button class="chip active" onclick="setQuality('auto',this)">Auto</button>
-        <button class="chip" onclick="setQuality('low',this)">Low</button>
-        <button class="chip" onclick="setQuality('high',this)">High</button>
-      </div>
-    </div>
-    <div class="setting-row">
-      <div class="setting-row-label"><p>Open in browser</p><p>If stream won't play in app</p></div>
-      <a href="https://s40.myradiostream.com:23535/listen" target="_blank" class="btn-ghost" style="font-size:.7rem;padding:6px 11px;">Open →</a>
-    </div>
+    <div class="setting-row"><div class="setting-row-label"><p>Quality</p><p>Auto adjusts to your connection</p></div><div style="display:flex;gap:5px;" id="quality-chips"><button class="chip active" onclick="setQuality('auto',this)">Auto</button><button class="chip" onclick="setQuality('low',this)">Low</button><button class="chip" onclick="setQuality('high',this)">High</button></div></div>
+    <div class="setting-row"><div class="setting-row-label"><p>Open in browser</p><p>If stream won't play in app</p></div><a href="https://s40.myradiostream.com:23535/listen" target="_blank" class="btn-ghost" style="font-size:.7rem;padding:6px 11px;">Open →</a></div>
   </div>
   <div class="setting-group">
     <p class="setting-group-label"><span class="material-symbols-outlined">bedtime</span>Sleep Timer</p>
@@ -1074,14 +462,25 @@ button{font-family:inherit;cursor:pointer;}
   <div class="setting-group">
     <p class="setting-group-label"><span class="material-symbols-outlined">palette</span>Appearance</p>
     <div style="display:flex;gap:8px;">
-      <button onclick="setTheme('ember')" id="ts-ember" style="flex:1;padding:10px 6px;border-radius:10px;border:2px solid var(--c-primary);background:linear-gradient(135deg,#1a0600,#3d1200);color:#ff8f6f;font-size:.76rem;font-weight:700;">Ember</button>
-      <button onclick="setTheme('cyan')" id="ts-cyan" style="flex:1;padding:10px 6px;border-radius:10px;border:2px solid transparent;background:linear-gradient(135deg,#001218,#002d38);color:#00d4ec;font-size:.76rem;font-weight:700;">Cyan</button>
+      <button onclick="setTheme('ember')" id="ts-ember" style="flex:1;padding:10px 6px;border-radius:10px;border:2px solid var(--c-primary);background:linear-gradient(135deg,#1a0600,#3d1200);color:#ff8f6f;font-size:.76rem;font-weight:700;">🔥 Ember</button>
+      <button onclick="setTheme('cyan')"  id="ts-cyan"  style="flex:1;padding:10px 6px;border-radius:10px;border:2px solid transparent;background:linear-gradient(135deg,#050a07,#0d2618);color:#4ade80;font-size:.76rem;font-weight:700;">🌿 Forest</button>
+    </div>
+  </div>
+  <div class="setting-group">
+    <p class="setting-group-label"><span class="material-symbols-outlined">campaign</span>Sponsorship Theme</p>
+    <p style="font-size:.72rem;color:var(--c-on-surface-variant);margin-bottom:10px;">Brand partners can theme the app during sponsored broadcasts.</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;" id="sponsor-chips">
+      <button class="chip active" onclick="setSponsor('default');setChip(this,'sponsor-chips')">🌿 Default</button>
+      <button class="chip" onclick="setSponsor('safaricom');setChip(this,'sponsor-chips')">📱 Safaricom</button>
+      <button class="chip" onclick="setSponsor('airtel');setChip(this,'sponsor-chips')">📡 Airtel</button>
+      <button class="chip" onclick="setSponsor('kcb');setChip(this,'sponsor-chips')">🏦 KCB</button>
     </div>
   </div>
   <div class="setting-group">
     <p class="setting-group-label"><span class="material-symbols-outlined">info</span>About</p>
     <div style="display:flex;flex-direction:column;gap:8px;font-size:.78rem;">
-      <div style="display:flex;justify-content:space-between;"><span style="color:var(--c-on-surface-variant);">App Version</span><span style="font-weight:600;">The Pulse v6</span></div>
+      <!-- version-tap class is the secret admin trigger — tap 5× -->
+      <div style="display:flex;justify-content:space-between;"><span style="color:var(--c-on-surface-variant);">App Version</span><span class="version-tap" style="font-weight:600;">The Pulse v8</span></div>
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--c-on-surface-variant);">Station</span><span style="font-weight:600;">Amaica Radio 98.7 FM</span></div>
       <div style="display:flex;justify-content:space-between;"><span style="color:var(--c-on-surface-variant);">Location</span><span style="font-weight:600;">Kakamega, Kenya</span></div>
       <div style="display:flex;justify-content:space-between;align-items:center;"><span style="color:var(--c-on-surface-variant);">Website</span><a href="http://amaicamedia.com" target="_blank" style="color:var(--c-primary);font-weight:600;text-decoration:none;">amaicamedia.com</a></div>
@@ -1095,1040 +494,224 @@ button{font-family:inherit;cursor:pointer;}
 
 </div><!-- /main-content -->
 
-<!-- MINI PLAYER -->
+<!-- ════════ MINI PLAYER ════════ -->
 <div id="mini-player" onclick="navigateTo('player')">
   <div class="mp-art">
     <span class="material-symbols-outlined" style="font-size:18px;color:var(--c-primary);font-variation-settings:'FILL' 1;z-index:1;">radio</span>
     <div class="pulse-ring" id="pulse-ring"></div>
   </div>
   <div class="mp-info">
-    <p class="mp-title" id="mini-show-title">The Midnight Pulse</p>
-    <p class="mp-sub" id="player-status">Tap to open player</p>
+    <p class="mp-title" id="mini-show-title">Amaica Media</p>
+    <p class="mp-sub"   id="connect-status">Tap to open player</p>
   </div>
   <div id="mini-wave" style="display:flex;align-items:center;gap:2px;margin-right:6px;opacity:.4;"></div>
   <button class="mini-play" onclick="event.stopPropagation();toggleRadio()">
-    <span class="material-symbols-outlined" style="font-size:18px;font-variation-settings:'FILL' 1;">play_arrow</span>
+    <span class="material-symbols-outlined" id="main-play" style="font-size:18px;font-variation-settings:'FILL' 1;">play_arrow</span>
   </button>
 </div>
 
-<!-- BOTTOM NAV -->
+<!-- ════════ BOTTOM NAV ════════ -->
 <nav id="bottom-nav">
-  <button class="nav-item active" id="nav-home"      onclick="navigateTo('home')"><span class="material-symbols-outlined">home</span><span class="nav-label">Home</span></button>
-  <button class="nav-item"        id="nav-player"    onclick="navigateTo('player')"><span class="material-symbols-outlined">radio</span><span class="nav-label">Listen</span></button>
-  <button class="nav-item"        id="nav-community" onclick="navigateTo('community')"><span class="material-symbols-outlined">forum</span><span class="nav-label">Chat</span></button>
-  <button class="nav-item"        id="nav-rewards"   onclick="navigateTo('rewards')"><span class="material-symbols-outlined">stars</span><span class="nav-label">Rewards</span></button>
-  <button class="nav-item"        id="nav-profile"   onclick="navigateTo('profile')"><span class="material-symbols-outlined">account_circle</span><span class="nav-label">Profile</span></button>
+  <button class="nav-item active"   id="nav-home"      onclick="navigateTo('home')"><span class="material-symbols-outlined">home</span><span class="nav-label">Home</span></button>
+  <button class="nav-item"          id="nav-player"    onclick="navigateTo('player')"><span class="material-symbols-outlined">radio</span><span class="nav-label">Listen</span></button>
+  <button class="nav-item"          id="nav-community" onclick="navigateTo('community')"><span class="material-symbols-outlined">forum</span><span class="nav-label">Chat</span></button>
+  <button class="nav-item"          id="nav-rewards"   onclick="navigateTo('rewards')"><span class="material-symbols-outlined">stars</span><span class="nav-label">Rewards</span></button>
+  <button class="nav-item"          id="nav-profile"   onclick="navigateTo('profile')"><span class="material-symbols-outlined">account_circle</span><span class="nav-label">Profile</span></button>
 </nav>
 
 <div id="toast-container"></div>
 
-<!-- ═══════════════════════════════════════════════
-     MAIN JAVASCRIPT
-═══════════════════════════════════════════════ -->
+<!-- ════════ VIBE BUTTON ════════ -->
+<div class="vibe-wrapper">
+  <button class="vibe-btn" onclick="sendPulseVibe()">
+    <span class="material-symbols-outlined">favorite</span>
+  </button>
+  <div class="vibe-stats">Pulse Vibe</div>
+</div>
+
+<!-- ════════ ADMIN PANEL (hidden — staff only) ════════ -->
+<div id="admin-panel" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--c-surface);overflow-y:auto;">
+  <div style="max-width:600px;margin:0 auto;padding:28px 20px 60px;">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:40px;">
+      <span class="section-label" style="margin-bottom:0;">Staff Portal</span>
+      <button class="btn-ghost" onclick="toggleAdmin(false)" style="opacity:0.6;">✕ Close</button>
+    </div>
+
+    <!-- ══ LIVE DASHBOARD (auto-populated by admin.js) ══ -->
+
+    <!-- Listener snapshot table rendered by renderAdminStats() -->
+    <div id="admin-stats" style="margin-bottom:0;"></div>
+
+    <!-- Live stat tiles + chart + map -->
+    <div id="admin-dashboard-live">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+        <div style="background:rgba(232,65,24,0.08);border:1px solid rgba(232,65,24,0.3);border-radius:12px;padding:16px;text-align:center;">
+          <p id="adm-live-status" style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-on-surface-variant);margin-bottom:6px;">&#9899; OFFLINE</p>
+          <p id="adm-live-count" style="font-family:var(--font-display);font-size:2rem;font-weight:800;color:var(--c-primary);line-height:1;">&#8212;</p>
+          <p style="font-size:.58rem;color:var(--c-on-surface-variant);margin-top:4px;text-transform:uppercase;letter-spacing:.08em;">Live Listeners</p>
+        </div>
+        <div style="background:var(--c-surface-high);border-radius:12px;padding:16px;text-align:center;">
+          <p style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-on-surface-variant);margin-bottom:6px;">Session Peak</p>
+          <p id="adm-peak-count" style="font-family:var(--font-display);font-size:2rem;font-weight:800;color:var(--c-on-surface);line-height:1;">&#8212;</p>
+          <p style="font-size:.58rem;color:var(--c-on-surface-variant);margin-top:4px;text-transform:uppercase;letter-spacing:.08em;">Peak Count</p>
+        </div>
+      </div>
+      <div style="background:var(--c-surface-high);border-radius:12px;padding:14px;margin-bottom:16px;">
+        <p style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-on-surface-variant);margin-bottom:10px;">Listener Trend (last 30 pts)</p>
+        <div style="height:130px;position:relative;"><canvas id="adm-listener-chart"></canvas></div>
+      </div>
+      <div style="background:var(--c-surface-high);border-radius:12px;overflow:hidden;margin-bottom:28px;">
+        <p style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-on-surface-variant);padding:12px 14px 8px;">Listeners by Country</p>
+        <div id="adm-listener-map" style="height:220px;width:100%;"></div>
+      </div>
+    </div>
+
+    <!-- ── REFINED REDEMPTION VERIFIER ── -->
+    <h2 style="font-family:var(--font-display);font-size:1.8rem;font-weight:800;margin-bottom:8px;">Verify Redemption</h2>
+    <p style="opacity:0.4;font-size:0.85rem;margin-bottom:28px;">Enter the unique AM-code shown by the listener.</p>
+
+    <div style="margin-bottom:36px;">
+      <input type="text" id="verify-input" placeholder="e.g. AM-X492"
+        style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(232,65,24,0.2);border-radius:16px;padding:20px;color:var(--c-on-surface);font-family:monospace;font-size:1.4rem;letter-spacing:0.08em;outline:none;text-transform:uppercase;"/>
+      <button onclick="checkCode()"
+        style="margin-top:14px;width:100%;padding:18px;border-radius:16px;background:var(--c-fire);color:#fff;font-family:var(--font-display);font-weight:800;font-size:1rem;border:none;box-shadow:0 10px 30px rgba(232,65,24,0.3);cursor:pointer;letter-spacing:0.04em;">
+        VERIFY CLAIM
+      </button>
+    </div>
+
+    <div id="verify-result-display"></div>
+    <!-- legacy target kept for admin.js compatibility -->
+    <div id="verify-result" style="display:none;"></div>
+
+    <!-- ── Feed editor ── -->
+    <div class="auth-card" style="margin-bottom:20px;margin-top:36px;">
+      <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);margin-bottom:10px;">📰 Feed Manager</p>
+      <div id="admin-feed-list" style="margin-bottom:12px;"></div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <select id="adm-feed-tag" style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);">
+          <option>News</option><option>Live</option><option>Rewards</option><option>Event</option>
+        </select>
+        <input id="adm-feed-title" type="text" placeholder="Headline…" style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+        <textarea id="adm-feed-body" placeholder="Body text…" rows="2" style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;resize:none;"></textarea>
+        <button class="btn-primary" onclick="adminAddFeed()" style="justify-content:center;">+ Add Feed Item</button>
+      </div>
+    </div>
+
+    <!-- ── Rewards editor ── -->
+    <div class="auth-card" style="margin-bottom:20px;">
+      <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);margin-bottom:10px;">🎁 Rewards Manager</p>
+      <div id="admin-rewards-list" style="margin-bottom:12px;"></div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;gap:8px;">
+          <input id="adm-rwd-icon"  type="text"   placeholder="Icon 🎟️" style="width:70px;background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+          <input id="adm-rwd-name"  type="text"   placeholder="Reward name…" style="flex:1;background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+          <input id="adm-rwd-pts"   type="number" placeholder="pts" style="width:80px;background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+        </div>
+        <input id="adm-rwd-desc" type="text" placeholder="Description…" style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+        <button class="btn-primary" onclick="adminAddReward()" style="justify-content:center;">+ Add Reward</button>
+      </div>
+    </div>
+
+    <!-- ── Marketplace editor ── -->
+    <div class="auth-card" style="margin-bottom:20px;">
+      <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--c-primary);margin-bottom:10px;">🛒 Marketplace Manager</p>
+      <div id="admin-market-list" style="margin-bottom:12px;"></div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;gap:8px;">
+          <input id="adm-mkt-icon"  type="text"   placeholder="Icon" style="width:60px;background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+          <input id="adm-mkt-name"  type="text"   placeholder="Item name…" style="flex:1;background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+          <input id="adm-mkt-price" type="number" placeholder="pts" style="width:80px;background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);font-size:.84rem;outline:none;"/>
+        </div>
+        <select id="adm-mkt-tag" style="background:var(--c-surface-high);border:1px solid var(--c-outline);border-radius:6px;padding:8px;color:var(--c-on-surface);">
+          <option>Physical</option><option>Digital</option><option>Exclusive</option>
+        </select>
+        <button class="btn-primary" onclick="adminAddMarket()" style="justify-content:center;">+ Add Market Item</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <script>
-// ── LOCALSTORAGE PERSISTENCE ──────────────────────────────────────
-const _saved = (() => { try { return JSON.parse(localStorage.getItem('amaica_pulse') || '{}'); } catch { return {}; } })();
-window._localPoints   = _saved.points        || 1240;
-window._localStreak   = _saved.streak        || 0;
-window._localUser     = _saved.username      || '';
-window._localChatMsgs = _saved.chatMsgs      || 2;
-window._listenMins    = _saved.listenMins    || 0;
-window._lastListenDay = _saved.lastListenDay || '';
-
-// ── DAILY STREAK ─────────────────────────────────────────────────
-function updateDailyStreak() {
-  const today = new Date().toDateString();
-  const yesterday = new Date(Date.now() - 86400000).toDateString();
-  if (window._lastListenDay === today) return; // already claimed today
-  window._localStreak = window._lastListenDay === yesterday ? window._localStreak + 1 : 1;
-  window._lastListenDay = today;
-  const bonus = Math.min(window._localStreak * 10, 100);
-  window._localPoints += bonus;
-  saveLocal();
-  showToast(`Day ${window._localStreak} Streak! +${bonus} pts awarded.`, 'workspace_premium');
-}
-
-// ── LOYALTY CIRCLE SYNC ───────────────────────────────────────────
-function syncLoyaltyUI() {
-  const streak = window._profile?.streak ?? window._localStreak ?? 0;
-  const numEl = document.getElementById('streak-num');
-  const circle = document.getElementById('loyalty-progress');
-  if (numEl) numEl.textContent = streak;
-  if (circle) {
-    const goal = 7; // 7-day week = full ring
-    const circumference = 283;
-    const progress = Math.min(streak / goal, 1);
-    circle.style.strokeDashoffset = circumference - (progress * circumference);
-    // Glow brighter as streak grows; turns amber fire at 3+
-    if (streak >= 3) {
-      circle.style.filter = `drop-shadow(0 0 8px #e84118)`;
-      circle.style.stroke = 'var(--brand-green-leaf)';
-    } else {
-      circle.style.filter = `drop-shadow(0 0 ${progress * 10}px var(--brand-green-leaf))`;
-      circle.style.stroke = '';
-    }
-  }
-}
-
-function saveLocal() {
-  const today = new Date().toDateString();
-  if (window._lastListenDay !== today) {
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    window._localStreak = window._lastListenDay === yesterday ? window._localStreak + 1 : 1;
-    window._lastListenDay = today;
-  }
-  try {
-    localStorage.setItem('amaica_pulse', JSON.stringify({
-      points: window._localPoints, streak: window._localStreak,
-      username: window._localUser, chatMsgs: window._localChatMsgs,
-      listenMins: window._listenMins, lastListenDay: window._lastListenDay
-    }));
-  } catch(e) {}
-  const se = document.getElementById('profile-streak'); if (se) se.textContent = window._localStreak;
-}
-
-window.addEventListener('load', () => {
-  syncLocalProfileUI();
-  updateSettingsThemeButtons();
-  // Kick off initial station data fetch
-  syncStationData();
-});
-
-// ── THEME ────────────────────────────────────────────────────────
-function setTheme(t) {
-  document.documentElement.setAttribute('data-theme', t);
-  document.getElementById('theme-ember').classList.toggle('active', t === 'ember');
-  document.getElementById('theme-cyan').classList.toggle('active', t === 'cyan');
-  // Adjust logo visibility for light mode
-  const logo = document.querySelector('.logo-img');
-  if (logo) logo.style.filter = t === 'cyan' ? 'brightness(0.8) contrast(1.2)' : 'drop-shadow(0 0 5px rgba(0,0,0,0.5))';
-  updateSettingsThemeButtons();
-  showToast(t === 'ember' ? 'Forest Mode' : 'Native Mode', 'palette');
-}
-function updateSettingsThemeButtons() {
-  const t = document.documentElement.getAttribute('data-theme') || 'ember';
-  const te = document.getElementById('ts-ember'); const tc = document.getElementById('ts-cyan');
-  if (te) te.style.borderColor = t === 'ember' ? 'var(--c-primary)' : 'transparent';
-  if (tc) tc.style.borderColor = t === 'cyan'  ? 'var(--c-primary)' : 'transparent';
-}
-
-// ── NAV ──────────────────────────────────────────────────────────
-function navigateTo(s) {
-  document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
-  const el = document.getElementById('screen-' + s); if (el) el.classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
-  const nb = document.getElementById('nav-' + s); if (nb) nb.classList.add('active');
-  document.getElementById('main-content').scrollTop = 0;
-  // Retract mini-player when chat is open to give more room
-  const miniPlayer = document.getElementById('mini-player');
-  if (miniPlayer) miniPlayer.classList.toggle('retracted', s === 'community');
-  if (s === 'rewards' && document.getElementById('r-leaderboard')?.style.display !== 'none') loadLeaderboard();
-  if (s === 'profile' || s === 'settings') { syncLocalProfileUI(); updateSettingsThemeButtons(); }
-  if (s === 'profile') syncLoyaltyUI();
-  // Re-observe cards on the newly visible screen
-  setTimeout(initReveal, 50);
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  RADIO ENGINE
-//  Stream  : https://s40.myradiostream.com:23535/listen.mp3
-//  Stats   : https://s40.myradiostream.com:23535/stats?json=1
-//  Metadata fetched via CORS proxy with two-proxy fallback
-// ═══════════════════════════════════════════════════════════════
-const STREAM_URL  = 'https://s40.myradiostream.com:23535/listen.mp3';
-const STATS_URL   = 'https://s40.myradiostream.com:23535/stats?json=1';
-// Two CORS proxies — if the first fails we rotate to the second automatically
-const CORS_PROXIES = [
-  'https://corsproxy.io/?',
-  'https://api.allorigins.win/raw?url='
-];
-// Single global audio object — never recreated, reused across play/stop cycles
-let audio = new Audio();
-audio.crossOrigin = 'anonymous';
-audio.preload = 'none'; // Disable buffering to stay at the live edge
-let isPlaying    = false;
-let metaInterval = null;
-let proxyIdx     = 0;   // tracks which proxy last succeeded
-
-async function toggleRadio() {
-  const playBtn   = document.getElementById('play-btn');
-  const playIcon  = playBtn ? playBtn.querySelector('.material-symbols-outlined') : null;
-  const miniIcons = document.querySelectorAll('.mini-play .material-symbols-outlined');
-  const statusEls = document.querySelectorAll('#player-status, .mp-sub, #player-status-bar');
-  const pulseDot  = document.querySelector('.pulse-dot');
-  const ring      = document.getElementById('pulse-ring');
-  const noa       = document.querySelector('.now-on-air');
-
-  if (!isPlaying) {
-    // ── Loading state ──
-    miniIcons.forEach(i => { i.textContent = 'sync'; i.classList.add('rotating'); });
-    if (playIcon) { playIcon.textContent = 'sync'; playIcon.classList.add('rotating'); }
-    statusEls.forEach(t => { if(t) t.textContent = 'Connecting...'; });
-
-    try {
-      // Fresh connection with cache-buster to kill stale buffers
-      audio.src = `${STREAM_URL}?t=${Date.now()}`;
-      await audio.play();
-
-      isPlaying = true;
-      miniIcons.forEach(i => { i.textContent = 'pause'; i.classList.remove('rotating'); });
-      if (playIcon) { playIcon.textContent = 'pause_circle'; playIcon.classList.remove('rotating'); }
-      if (pulseDot) pulseDot.classList.add('active');
-      if (ring)     { ring.style.animationPlayState = 'running'; }
-      if (noa)      noa.classList.add('playing');
-      setPlayVisuals(true);
-
-      // Live-sync: if playback falls >3s behind the buffer edge, snap to live
-      audio.addEventListener('timeupdate', () => {
-        if (audio.buffered.length > 0) {
-          const bufferEnd = audio.buffered.end(audio.buffered.length - 1);
-          if (bufferEnd - audio.currentTime > 3) {
-            audio.currentTime = bufferEnd - 0.1;
-          }
-        }
-      });
-
-      startInteractiveSync();
-      showToast('Live Sync Active', 'timer');
-      sbEarnPoints(5, 'Tuned in');
-      if (window.startListenSession) startListenSession();
-      if (window._lastListenDay !== new Date().toDateString()) saveLocal();
-      updateDailyStreak();
-
-    } catch (err) {
-      console.error('Stream Sync Error:', err);
-      showToast('Connection blocked by browser', 'error');
-      statusEls.forEach(t => { if(t) t.textContent = 'Stream Blocked'; });
-      resetRadioUI();
-    }
-  } else {
-    // ── Stop — hard disconnect to clear the buffer ──
-    audio.pause();
-    audio.src = '';
-    isPlaying = false;
-    resetRadioUI();
-    stopInteractiveSync();
-    if (window.endListenSession) endListenSession();
-  }
-}
-
-function resetRadioUI() {
-  const playBtn   = document.getElementById('play-btn');
-  const playIcon  = playBtn ? playBtn.querySelector('.material-symbols-outlined') : null;
-  const miniIcons = document.querySelectorAll('.mini-play .material-symbols-outlined');
-  const statusEls = document.querySelectorAll('#player-status, .mp-sub, #player-status-bar');
-  const pulseDot  = document.querySelector('.pulse-dot');
-  const ring      = document.getElementById('pulse-ring');
-  const noa       = document.querySelector('.now-on-air');
-
-  if (playIcon)  { playIcon.textContent = 'play_arrow'; playIcon.classList.remove('rotating'); }
-  miniIcons.forEach(i => { i.textContent = 'play_arrow'; i.classList.remove('rotating'); });
-  statusEls.forEach(t => { if(t) t.textContent = '98.7 FM — The Pulse'; });
-  if (pulseDot) pulseDot.classList.remove('active');
-  if (ring)     ring.style.animationPlayState = 'paused';
-  if (noa)      noa.classList.remove('playing');
-  setPlayVisuals(false);
-}
-
-function setPlayVisuals(playing) {
-  // Vinyl spin
-  const art = document.querySelector('.player-art');
-  if (playing) { art?.classList.add('is-spinning'); } else { art?.classList.remove('is-spinning'); }
-  // Mini-player glow
-  const mini = document.getElementById('mini-player');
-  if (playing) { mini?.classList.add('playing'); } else { mini?.classList.remove('playing'); }
-  // Orb + hero bar
-  const orb = document.getElementById('noa-orb-pulse');  if (orb) orb.style.animationPlayState  = playing ? 'running' : 'paused';
-  const ag  = document.getElementById('player-art-glow'); if (ag)  ag.style.animationPlayState   = playing ? 'running' : 'paused';
-  const bar = document.getElementById('noa-bar-fill');
-  if (bar) { bar.classList.toggle('live-stream', playing); if (!playing) bar.style.width = '0'; }
-  // Pulse ring colour
-  const ring = document.getElementById('pulse-ring');
-  if (ring) { ring.style.borderColor = 'var(--brand-green-leaf)'; ring.style.animationPlayState = playing ? 'running' : 'paused'; }
-  // Wave bars — brand green when playing, surface colour when paused
-  document.querySelectorAll('.wave-bar').forEach((b, i) => {
-    if (playing) {
-      b.style.background = 'var(--brand-green-leaf)';
-      b.style.animation = `wave ${0.5 + Math.random()}s ease-in-out infinite alternate`;
-      b.style.animationDelay = `${i * 0.05}s`;
-    } else {
-      b.style.background = 'var(--c-surface-highest)';
-      b.style.animation = 'none';
-      b.style.height = '4px';
-    }
-  });
-}
-
-function handleListenNow() { navigateTo('player'); if (!isPlaying) toggleRadio(); }
-function setVolume(v) { audio.volume = v / 100; }
-
-// ── STATION DATA: metadata + listener count via CORS proxy ───────
-async function syncStationData() {
-  const encoded = encodeURIComponent(STATS_URL);
-
-  for (let attempt = 0; attempt < CORS_PROXIES.length; attempt++) {
-    const idx = (proxyIdx + attempt) % CORS_PROXIES.length;
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch(CORS_PROXIES[idx] + encoded, {
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      // Different Icecast/Shoutcast versions use different field names
-      const src  = data.streams?.[0] || data;
-
-      // ── Track title ──────────────────────────────────────────
-      const raw = src.songtitle || src.title || src.currentsong || src.song || '';
-      if (raw && raw.trim()) applyNowPlaying(raw.trim());
-
-      // ── Listener count ───────────────────────────────────────
-      const count = parseInt(
-        src.uniquelisteners || src.currentlisteners || src.listeners || '0',
-        10
-      );
-      if (count > 0) {
-        const lc = document.getElementById('listener-count');
-        if (lc) lc.textContent = count.toLocaleString();
-        const ev = document.getElementById('ev-listeners');
-        if (ev) ev.textContent = count.toLocaleString() + ' listening';
-      }
-
-      // Proxy succeeded — remember it
-      proxyIdx = idx;
-      return; // done
-    } catch (e) {
-      // Try next proxy on timeout / network error
-      console.warn('Proxy', idx, 'failed:', e.message || e);
-    }
-  }
-  // All proxies failed silently — keep showing last known data
-}
-
-/**
- * Takes a raw "Artist - Title" string from the station stats
- * and updates every relevant element in the UI.
- */
-function applyNowPlaying(raw) {
-  const dash   = raw.indexOf(' - ');
-  const artist = dash > -1 ? raw.slice(0, dash).trim()  : '';
-  const title  = dash > -1 ? raw.slice(dash + 3).trim() : raw;
-
-  // Mini player
-  const mt = document.getElementById('mini-show-title');
-  if (mt) mt.textContent = title;
-
-  // Player status under mini player
-  if (isPlaying) {
-    const ps = document.getElementById('player-status');
-    if (ps) ps.textContent = artist || '98.7 FM · Live';
-  }
-
-  // Hero card
-  const ht = document.getElementById('hero-show-title');
-  if (ht) ht.textContent = title;
-  const hh = document.getElementById('hero-show-host');
-  if (hh && artist) hh.textContent = 'by ' + artist;
-
-  // Full player screen
-  const pt = document.getElementById('player-show-title');
-  if (pt) pt.textContent = artist ? `${title} — ${artist}` : title;
-  const ph = document.getElementById('player-show-host');
-  if (ph && artist) ph.textContent = artist;
-
-  // Player status bar
-  const psb = document.getElementById('player-status-bar');
-  if (psb && isPlaying) psb.textContent = artist ? `Now playing: ${artist}` : 'Live on 98.7 FM';
-}
-
-function startInteractiveSync() {
-  syncStationData();
-  metaInterval = setInterval(syncStationData, 15000); // refresh every 15 s
-}
-function stopInteractiveSync() {
-  clearInterval(metaInterval);
-}
-
-// ── WAVEFORM BACKGROUND ──────────────────────────────────────────
-const hwb = document.getElementById('hero-wave-bg');
-if (hwb) {
-  for (let i = 0; i < 40; i++) {
-    const b = document.createElement('div');
-    b.classList.add('wave-bar');
-    Object.assign(b.style, {
-      width: '4px', background: 'var(--c-primary)', opacity: '1',
-      animationDelay:    (Math.random() * -1.2) + 's',
-      animationDuration: (0.7 + Math.random() * 0.9) + 's'
-    });
-    hwb.appendChild(b);
-  }
-}
-
-// ── ANIMATED LISTENER COUNT (fallback when not playing) ──────────
-let lc = 1247;
-setInterval(() => {
-  lc += Math.floor(Math.random() * 7) - 3;
-  lc = Math.max(1100, Math.min(1500, lc));
-  // Only update DOM when the real stats haven't set a value recently
-  if (!isPlaying) {
-    const e = document.getElementById('listener-count'); if (e) e.textContent = lc.toLocaleString();
-    const ev = document.getElementById('ev-listeners');  if (ev) ev.textContent = lc.toLocaleString() + ' listening';
-  }
-}, 3500);
-
-// ── POINTS ───────────────────────────────────────────────────────
-if (typeof window.sbEarnPoints === 'undefined') {
-  window.sbEarnPoints = function(pts) {
-    window._localPoints += pts;
-    saveLocal();
-    updateLocalUI();
-    showPtsPop(pts);
-  };
-}
-function animateCounter(el, from, to, duration = 600) {
-  if (!el) return;
-  const start = performance.now();
-  const update = (now) => {
-    const progress = Math.min((now - start) / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-    const current = Math.round(from + (to - from) * eased);
-    el.textContent = current.toLocaleString();
-    if (progress < 1) requestAnimationFrame(update);
-  };
-  requestAnimationFrame(update);
-}
-function updateLocalUI() {
-  const newPts = window._localPoints;
-  const f = newPts.toLocaleString();
-  ['points-display','profile-pts-num'].forEach(id => {
-    const e = document.getElementById(id);
-    if (e) {
-      const prev = parseInt(e.textContent.replace(/,/g,'')) || 0;
-      animateCounter(e, prev, newPts);
-    }
-  });
-  const pp = document.getElementById('profile-pts');  if (pp) pp.textContent = f + ' pts';
-  const lp = document.getElementById('lb-your-pts'); if (lp) lp.textContent = f + ' pts';
-}
-function showPtsPop(pts) {
-  const p = document.createElement('div');
-  p.className = 'pts-pop';
-  p.textContent = '+' + pts + ' pts';
-  // Spread multiple pops for bigger awards
-  const count = pts >= 50 ? 3 : pts >= 20 ? 2 : 1;
-  for (let i = 0; i < count; i++) {
-    const pop = p.cloneNode(true);
-    pop.style.left = (Math.random() * 55 + 20) + '%';
-    pop.style.bottom = '168px';
-    pop.style.animationDelay = (i * 0.12) + 's';
-    pop.style.fontSize = (0.8 + Math.random() * 0.5) + 'rem';
-    document.body.appendChild(pop);
-    setTimeout(() => pop.remove(), 1700 + i * 120);
-  }
-}
-function claimReward(cost) {
-  const bal = window._profile?.points ?? window._localPoints;
-  if (bal < cost) { showToast('Not enough points', 'error'); return; }
-  if (window._profile) window._profile.points -= cost; else window._localPoints -= cost;
-  updateLocalUI();
-  showToast('Reward claimed! 🎉', 'celebration');
-}
-// Award listen bonus every minute while playing
-setInterval(() => {
-  if (isPlaying) {
-    sbEarnPoints(10, 'Listening bonus');
-    showToast('+10 pts for listening!', 'stars');
-    window._listenMins = (window._listenMins || 0) + 1;
-    saveLocal();
-    const lm = document.getElementById('profile-listen-mins'); if (lm) lm.textContent = window._listenMins;
-  }
-}, 60000);
-
-// ── TOAST ────────────────────────────────────────────────────────
-function showToast(msg, icon) {
-  const c = document.getElementById('toast-container');
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.innerHTML = `<span class="material-symbols-outlined">${icon || 'info'}</span>${msg}`;
-  c.appendChild(t);
-  setTimeout(() => t.remove(), 2900);
-}
-
-window.showLiveShoutout = (username, text) => {
-  const c = document.getElementById('toast-container');
-  const s = document.createElement('div');
-  s.className = 'toast shoutout-toast';
-  s.innerHTML = `<div style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:.58rem;color:var(--c-tertiary);font-weight:800;letter-spacing:.1em;">📣 LIVE SHOUTOUT</span><span style="font-size:.78rem;"><strong>${username}:</strong> ${text}</span></div>`;
-  c.appendChild(s);
-  setTimeout(() => s.remove(), 5000);
-};
-
-// ── CHAT ─────────────────────────────────────────────────────────
-const seedMsgs = [
-  { u: 'Marcus R.', text: 'DJ Echo is fire tonight',          own: false, time: '9:42 PM', pts: true },
-  { u: 'Elena V.',  text: "Been tuned in for 2 hours. Can't leave!", own: false, time: '9:44 PM', pts: false },
-  { u: 'You',       text: 'Just joined — this is the vibe',   own: true,  time: '9:45 PM', pts: false },
-  { u: 'J. Aris',   text: "Who's calling in next?",           own: false, time: '9:46 PM', pts: true },
-];
-function buildMsg(m) {
-  const d = document.createElement('div');
-  d.className = 'cmsg' + (m.own ? ' own' : '');
-  d.innerHTML = `<div class="cav">${m.u.charAt(0)}</div><div class="cbw"><p class="cuser">${m.u} ${m.pts ? '<span class="pts-pill"><span class="material-symbols-outlined" style="font-size:10px;">stars</span>+5 pts</span>' : ''}</p><div class="cbubble">${m.text}</div><p class="ctime">${m.time}</p></div>`;
-  return d;
-}
-window.appendChatMsg = function(m) {
-  const c = document.getElementById('chat-messages'); if (!c) return;
-  c.appendChild(buildMsg(m));
-  c.scrollTop = c.scrollHeight;
-};
-function initChat() {
-  const c = document.getElementById('chat-messages'); if (!c) return;
-  seedMsgs.forEach(m => c.appendChild(buildMsg(m)));
-  c.scrollTop = c.scrollHeight;
-}
-function sendChat() {
-  const inp = document.getElementById('chat-input');
-  const txt = inp.value.trim(); if (!txt) return;
-  const c = document.getElementById('chat-messages');
-  const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  c.appendChild(buildMsg({ u: window._profile?.username || window._localUser || 'You', text: txt, own: true, time: t, pts: false }));
-  c.scrollTop = c.scrollHeight; inp.value = '';
-  window._localChatMsgs++; updateChatMission(); saveLocal();
-  sbEarnPoints(5, 'Sent message'); showToast('+5 Pulse Points!', 'stars');
-  if (window.sbSendMessage) sbSendMessage(txt);
-  // Show typing indicator then reply
-  const rs = [{ u: 'Elena V.', text: 'Yes!' }, { u: 'Marcus R.', text: "That's it!" }, { u: 'J. Aris', text: 'Welcome!' }];
-  const r = rs[Math.floor(Math.random() * rs.length)];
-  const typingEl = document.createElement('div');
-  typingEl.className = 'cmsg';
-  typingEl.id = 'typing-indicator';
-  typingEl.innerHTML = `<div class="cav">${r.u.charAt(0)}</div><div class="cbw"><p class="cuser">${r.u}</p><div class="cbubble" style="display:flex;gap:4px;align-items:center;padding:10px 14px;"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div></div>`;
-  c.appendChild(typingEl);
-  c.scrollTop = c.scrollHeight;
-  setTimeout(() => {
-    typingEl.remove();
-    appendChatMsg({ u: r.u, text: r.text, own: false, time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), pts: true });
-  }, 1000 + Math.random() * 600);
-}
-function updateChatMission() {
-  const n = window._localChatMsgs, g = 5;
-  const pct = Math.min(100, (n / g) * 100);
-  const b = document.getElementById('chat-prog');        if (b) b.style.width = pct + '%';
-  const l = document.getElementById('chat-mission-lbl'); if (l) l.textContent = Math.min(n, g) + ' / ' + g + ' messages';
-  const pc = document.getElementById('profile-chat');    if (pc) pc.textContent = n;
-}
-
-// ── HOME QUICK CHAT ──────────────────────────────────────────────
-function homeQuickChat() {
-  const inp = document.getElementById('home-chat-input'); if (!inp) return;
-  const txt = inp.value.trim(); if (!txt) return;
-  inp.value = '';
-  const preview = document.getElementById('home-chat-preview');
-  if (preview) {
-    const name = window._profile?.username || window._localUser || 'You';
-    const div = document.createElement('div'); div.className = 'cpm';
-    div.innerHTML = `<div class="cpm-av">${name.charAt(0).toUpperCase()}</div><div class="cpm-body"><p class="cpm-user" style="color:var(--c-on-surface);">${name}</p><p class="cpm-text">${txt}</p></div>`;
-    preview.appendChild(div);
-    if (preview.children.length > 5) preview.removeChild(preview.children[0]);
-  }
-  sbEarnPoints(5, 'Sent message'); showToast('+5 Pulse Points!', 'stars');
-  window._localChatMsgs++; updateChatMission(); saveLocal();
-  if (window.sbSendMessage) sbSendMessage(txt);
-}
-
-// ── REMINDER ─────────────────────────────────────────────────────
-const _reminders = new Set();
-function setReminder(idx, btn) {
-  if (_reminders.has(idx)) {
-    _reminders.delete(idx);
-    btn.textContent = 'Remind'; btn.classList.remove('set');
-    showToast('Reminder removed', 'notifications_off');
-  } else {
-    _reminders.add(idx);
-    btn.textContent = '✓ Set'; btn.classList.add('set');
-    sbEarnPoints(5, 'Set reminder');
-    showToast('Reminder set! Come back at showtime for +50 pts.', 'event_upcoming');
-  }
-}
-
-// ── CHIPS ────────────────────────────────────────────────────────
-function setChip(el, gid) {
-  document.querySelectorAll('#' + gid + ' .chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-}
-
-// ── REWARDS SECTIONS ─────────────────────────────────────────────
-function showRSec(s) {
-  ['points','leaderboard','perks','refer'].forEach(x => {
-    const e = document.getElementById('r-' + x); if (e) e.style.display = x === s ? 'block' : 'none';
-  });
-  if (s === 'leaderboard') loadLeaderboard();
-  if (s === 'points') {
-    setTimeout(() => {
-      document.querySelectorAll('#r-points .prog-fill').forEach(b => {
-        const w = b.style.width; b.style.width = '0';
-        requestAnimationFrame(() => { b.style.transition = 'width 1s cubic-bezier(0.22,1,0.36,1)'; b.style.width = w; });
-      });
-    }, 100);
-  }
-  if (s === 'perks') renderRewardsStore();
-}
-const localLB = [
-  { username: 'Sarah Sterling', points: 7800, streak: 14 },
-  { username: 'Luka Chen',      points: 6200, streak: 8  },
-  { username: 'Nadia Bloom',    points: 5900, streak: 32 },
-  { username: 'Keion Marks',    points: 5400, streak: 5  },
-  { username: 'Priya Dev',      points: 4800, streak: 21 },
-];
-window.renderLeaderboard = function(data) {
-  const c = document.getElementById('lb-list'); if (!c) return;
-  c.innerHTML = '';
-  (data || localLB).forEach((u, i) => {
-    const streakValue = u.streak || 0;
-    let fireColor = 'var(--c-on-surface-variant)'; let fireSize = '12px';
-    if (streakValue >= 3) { fireColor = '#ff9500'; fireSize = '14px'; }
-    if (streakValue >= 7) { fireColor = 'var(--brand-green-leaf)'; fireSize = '18px'; }
-    const streakFire = streakValue > 0 ? `<span style="color:${fireColor};font-size:${fireSize};font-weight:800;margin-left:5px;">${streakValue >= 7 ? '🌳' : '🔥'} ${streakValue}</span>` : '';
-    const row = document.createElement('div');
-    row.className = 'lb-row';
-    row.innerHTML = `<span class="lb-rank">${i + 4}</span><div class="lb-av" style="background:var(--brand-green-forest);color:var(--brand-green-leaf);border:1px solid var(--brand-green-leaf);">${(u.username || '?').charAt(0)}</div><div style="flex:1;"><p class="lb-name">${u.username}${streakFire}</p><p style="font-size:.58rem;color:var(--c-on-surface-variant);">Level: ${u.tier || 'Bronze'}</p></div><span class="lb-pts" style="color:var(--brand-green-leaf);">${((u.points || 0) / 1000).toFixed(1)}k</span>`;
-    c.appendChild(row);
-  });
-};
-if (typeof window.loadLeaderboard === 'undefined') {
-  window.loadLeaderboard = function() { renderLeaderboard(localLB); };
-}
-
-// ── SLEEP TIMER ──────────────────────────────────────────────────
-let _sleepTimer = null, _sleepTick = null;
-function setSleepTimer(mins) {
-  clearTimeout(_sleepTimer); clearInterval(_sleepTick);
-  const el = document.getElementById('sleep-status');
-  if (mins === 0) { if (el) el.textContent = 'Not set'; showToast('Sleep timer cancelled', 'bedtime'); return; }
-  let remaining = mins;
-  if (el) el.textContent = `Stops in ${remaining} min`;
-  showToast(`Sleep timer: ${mins} min`, 'bedtime');
-  _sleepTick = setInterval(() => {
-    remaining--;
-    if (el) el.textContent = remaining > 0 ? `Stops in ${remaining} min` : 'Stopping…';
-    if (remaining <= 0) clearInterval(_sleepTick);
-  }, 60000);
-  _sleepTimer = setTimeout(() => {
-    if (isPlaying) toggleRadio();
-    if (el) el.textContent = 'Not set';
-    showToast('Sleep timer — stream stopped', 'bedtime');
-  }, mins * 60000);
-}
-
-// ── QUALITY ──────────────────────────────────────────────────────
-function setQuality(q, btn) {
-  document.querySelectorAll('#quality-chips .chip').forEach(c => c.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  showToast({ auto: 'Auto quality', low: 'Low bandwidth', high: 'High quality' }[q] || q, 'graphic_eq');
-}
-
-// ── PROFILE ──────────────────────────────────────────────────────
-function saveLocalUsername() {
-  const inp = document.getElementById('local-username-input');
-  const name = inp?.value.trim(); if (!name) { showToast('Enter a name first', 'error'); return; }
-  window._localUser = name; saveLocal(); syncLocalProfileUI(); showToast('Name saved', 'check_circle');
-}
-function resetAllData() {
-  if (!confirm('Reset all local data? Points and history will be cleared.')) return;
-  try { localStorage.removeItem('amaica_pulse'); } catch(e) {}
-  window._localPoints = 0; window._localStreak = 0; window._localUser = '';
-  window._localChatMsgs = 0; window._listenMins = 0; window._lastListenDay = '';
-  syncLocalProfileUI(); showToast('Local data cleared', 'check_circle');
-}
-function syncLocalProfileUI() {
-  const pts    = window._profile?.points        ?? window._localPoints;
-  const streak = window._profile?.streak        ?? window._localStreak;
-  const msgs   = window._profile?.messages_sent ?? window._localChatMsgs;
-  const name   = window._profile?.username      || window._localUser || 'Listener';
-  const mins   = window._listenMins || 0;
-
-  const av = document.getElementById('profile-avatar-letter');     if (av) av.textContent = (name.charAt(0) || 'L').toUpperCase();
-  const ud = document.getElementById('profile-username-display');  if (ud) ud.textContent = name;
-  const ml = document.getElementById('profile-member-label');
-  if (ml) ml.textContent = window._profile ? 'Cloud synced · Pulse Points Member' : 'Local listener · points saved on this device';
-
-  const f = pts.toLocaleString();
-  ['points-display','profile-pts-num'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = f; });
-  const pp = document.getElementById('profile-pts');  if (pp) pp.textContent = f + ' pts';
-  const lb = document.getElementById('lb-your-pts'); if (lb) lb.textContent = f + ' pts';
-  const ps = document.getElementById('profile-streak');      if (ps) ps.textContent = streak;
-  const pc = document.getElementById('profile-chat');        if (pc) pc.textContent = msgs;
-  const lm = document.getElementById('profile-listen-mins'); if (lm) lm.textContent = mins;
-
-  const inp = document.getElementById('local-username-input');
-  if (inp && !inp.value && window._localUser) inp.value = window._localUser;
-
-  const ue = document.getElementById('username-editor');
-  const li = document.getElementById('profile-logged-in');
-  const as = document.getElementById('auth-section');
-  if (window._currentUser) {
-    if (ue) ue.style.display = 'none'; if (li) li.style.display = 'block'; if (as) as.style.display = 'none';
-  } else {
-    if (ue) ue.style.display = 'block'; if (li) li.style.display = 'none'; if (as) as.style.display = 'block';
-  }
-}
-const _origRAS = window.renderAuthState;
-window.renderAuthState = () => { if (_origRAS) _origRAS(); syncLocalProfileUI(); };
-
-// ── AUTH ─────────────────────────────────────────────────────────
-function switchTab(t) {
-  document.getElementById('tab-signin').classList.toggle('active', t === 'signin');
-  document.getElementById('tab-signup').classList.toggle('active', t === 'signup');
-  document.getElementById('form-signin').style.display = t === 'signin' ? 'block' : 'none';
-  document.getElementById('form-signup').style.display = t === 'signup' ? 'block' : 'none';
-}
-async function doSignIn() {
-  if (!window._sb) { showToast('Backend not connected', 'error'); return; }
-  try { await sbSignIn(document.getElementById('si-email').value, document.getElementById('si-pass').value); showToast('Welcome back!', 'check_circle'); }
-  catch(e) { const er = document.getElementById('si-error'); er.textContent = e.message; er.style.display = 'block'; }
-}
-async function doSignUp() {
-  if (!window._sb) { showToast('Backend not connected', 'error'); return; }
-  try { await sbSignUp(document.getElementById('su-email').value, document.getElementById('su-pass').value, document.getElementById('su-user').value); showToast('Account created! Check email to verify.', 'check_circle'); }
-  catch(e) { const er = document.getElementById('su-error'); er.textContent = e.message; er.style.display = 'block'; }
-}
-
-// ── SHARE / COPY ─────────────────────────────────────────────────
-function shareApp() {
-  if (navigator.share) {
-    navigator.share({ title: 'Amaica Media', text: 'Listen live on Amaica Radio 98.7 FM!', url: location.href });
-  } else {
-    navigator.clipboard.writeText(location.href).then(() => showToast('Link copied!', 'link'));
-  }
-}
-function copyCode() {
-  const c = document.getElementById('referral-code-display')?.textContent || 'PULSE-XK47';
-  navigator.clipboard.writeText(c).then(() => showToast('Code copied!', 'content_copy'));
-}
-
-// ── BURN SOUND (points feedback) ─────────────────────────────────
-function playBurnSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const duration = 0.5;
-    const buffer = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    const noise = ctx.createBufferSource(); noise.buffer = buffer;
-    const filter = ctx.createBiquadFilter(); filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1000, ctx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + duration);
-    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
-    noise.start();
-  } catch(e) { /* AudioContext blocked — silently skip */ }
-}
-// Wrap sbEarnPoints so every point award triggers the burn sound
-const _origEarnPoints = window.sbEarnPoints;
-window.sbEarnPoints = async (pts, reason) => {
-  playBurnSound();
-  if (_origEarnPoints) await _origEarnPoints(pts, reason);
-};
-
-// ── SCROLL REVEAL ─────────────────────────────────────────────────
-function initReveal() {
-  const obs = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } });
-  }, { threshold: 0.08 });
-  document.querySelectorAll('.feed-card, .ev-card, .vault-card, .rwd-card, .ach-card, .lb-row, .content-card, .return-card')
-    .forEach((el, i) => {
-      el.classList.add('reveal');
-      el.style.transitionDelay = `${(i % 6) * 0.05}s`;
-      obs.observe(el);
-    });
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  PROGRAMME SCHEDULE ENGINE
-//  Times as minutes from midnight. days: 0=Sun … 6=Sat
-// ═══════════════════════════════════════════════════════════════
-const SHOW_SCHEDULE = [
-  // ── MONDAY – FRIDAY ──────────────────────────────────────────
-  { name:'Amaica Asubuhi',    host:'Godson & Chiteri',                    days:[1,2,3,4,5], start:360,  end:600  },
-  { name:'Jungu la Habari',   host:'Amaica Newsroom',                     days:[1,2,3,4,5], start:420,  end:430,  isNews:true },
-  { name:'Jungu la Habari',   host:'Amaica Newsroom',                     days:[1,2,3,4,5], start:540,  end:550,  isNews:true },
-  { name:'Mikikimikiki',      host:'Antony',                              days:[1,2,3,4,5], start:600,  end:780  },
-  { name:'Tuvibe',            host:'Amaica Media',                        days:[1,2,3,4,5], start:780,  end:960  },
-  { name:'Jungu la Habari',   host:'Amaica Newsroom',                     days:[1,2,3,4,5], start:780,  end:790,  isNews:true },
-  { name:'Rhumba Koleka',     host:'Joshua · Chiteri · Brilliant',        days:[1,2,3],     start:960,  end:1200 },
-  { name:'SupaJam',           host:'Vincent',                             days:[4,5],       start:960,  end:1200 },
-  { name:'Jungu la Habari',   host:'Amaica Newsroom',                     days:[1,2,3,4,5], start:960,  end:970,  isNews:true },
-  // ── SATURDAY ─────────────────────────────────────────────────
-  { name:'Mdahalo',           host:'Godson',                              days:[6],         start:480,  end:660  },
-  { name:'SupaJam',           host:'Vincent',                             days:[6],         start:660,  end:900  },
-  { name:'Amaica Viwanjani',  host:'Antony & Chiteri',                    days:[6],         start:900,  end:1140 },
-  // ── SUNDAY ───────────────────────────────────────────────────
-  { name:'Hema ya Ushindi',   host:'Shitanda',                            days:[0],         start:360,  end:600  },
-  { name:'Sifa',              host:'Joshua',                              days:[0],         start:600,  end:780  },
-  { name:'SupaJam',           host:'Vincent',                             days:[0],         start:780,  end:960  },
-  { name:'Barizika',          host:'Joshua',                              days:[0],         start:960,  end:1140 },
-];
-
-function _minsNow() {
-  const n = new Date();
-  return n.getHours() * 60 + n.getMinutes();
-}
-function _dayShows(dow, excludeNews = false) {
-  return SHOW_SCHEDULE
-    .filter(s => s.days.includes(dow) && (!excludeNews || !s.isNews))
-    .sort((a, b) => a.start - b.start);
-}
-function _fmtTime(mins) {
-  const h = Math.floor(mins / 60) % 24;
-  const m = mins % 60;
-  const ampm = h < 12 ? 'AM' : 'PM';
-  const hh = h % 12 || 12;
-  return m === 0 ? `${hh} ${ampm}` : `${hh}:${String(m).padStart(2,'0')} ${ampm}`;
-}
-function _dayName(dow) {
-  return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dow];
-}
-
-function getCurrentShow() {
-  const now = _minsNow(), dow = new Date().getDay();
-  // Prefer main shows, fall back to news
-  return _dayShows(dow).find(s => now >= s.start && now < s.end) || null;
-}
-function getNextMainShow() {
-  const now = _minsNow(), dow = new Date().getDay();
-  const later = _dayShows(dow, true).find(s => s.start > now);
-  if (later) return { ...later, dayLabel: 'Today' };
-  const tomorrow = (dow + 1) % 7;
-  const first = _dayShows(tomorrow, true)[0];
-  return first ? { ...first, dayLabel: _dayName(tomorrow) } : null;
-}
-function getUpcomingShows(count = 3) {
-  const now = _minsNow(), dow = new Date().getDay();
-  const result = [];
-  // Rest of today
-  _dayShows(dow, true).filter(s => s.start > now)
-    .forEach(s => result.push({ ...s, dayLabel: 'Today' }));
-  // Tomorrow if needed
-  if (result.length < count) {
-    const tmr = (dow + 1) % 7;
-    _dayShows(tmr, true)
-      .forEach(s => result.push({ ...s, dayLabel: _dayName(tmr) }));
-  }
-  return result.slice(0, count);
-}
-
-function syncScheduleUI() {
-  const current  = getCurrentShow();
-  const next     = getNextMainShow();
-  const upcoming = getUpcomingShows(3);
-
-  // ── Hero card ──────────────────────────────────────────────
-  const titleEl  = document.getElementById('hero-show-title');
-  const hostEl   = document.getElementById('hero-show-host');
-  if (titleEl) titleEl.textContent = current ? current.name : 'Amaica Media';
-  if (hostEl)  hostEl.textContent  = current
-    ? (current.isNews ? '📰 ' + current.host : 'with ' + (current.host || 'Amaica Media 98.7 FM'))
-    : '98.7 FM · Live';
-
-  // ── Player screen ──────────────────────────────────────────
-  const ptEl = document.getElementById('player-show-title');
-  const phEl = document.getElementById('player-show-host');
-  if (ptEl) ptEl.textContent = current ? current.name : 'Amaica Media 98.7 FM';
-  if (phEl) phEl.textContent = current ? (current.host || '98.7 FM') : '98.7 FM';
-
-  // ── Mini player ────────────────────────────────────────────
-  const mtEl = document.getElementById('mini-show-title');
-  if (mtEl) mtEl.textContent = current ? current.name : 'Amaica Media';
-
-  // ── Next Up strip ──────────────────────────────────────────
-  const nuEl = document.querySelector('.nu-label');
-  if (nuEl && next) {
-    nuEl.innerHTML = `<strong>${next.name}</strong> · ${_fmtTime(next.start)}`;
-  } else if (nuEl) {
-    nuEl.innerHTML = '<strong>Amaica Media</strong> · 98.7 FM';
-  }
-
-  // ── Return card: upcoming shows ───────────────────────────
-  const rcEyebrow = document.getElementById('rc-eyebrow');
-  const rcTitle   = document.getElementById('rc-title');
-  const rcList    = document.getElementById('rc-shows-list');
-
-  const allToday = getUpcomingShows(10).every(s => s.dayLabel === 'Today');
-  if (rcEyebrow) rcEyebrow.textContent = allToday ? 'Later Today' : 'Coming Up';
-  if (rcTitle)   rcTitle.textContent   = allToday ? "Today's Programme" : "Up Next on Air";
-
-  if (rcList && upcoming.length) {
-    rcList.innerHTML = upcoming.map((s, i) => `
-      <div class="rc-show-row">
-        <span class="rc-time">${_fmtTime(s.start)}</span>
-        <div class="rc-show-info">
-          <p class="rc-show-name">${s.name}</p>
-          <p class="rc-show-host">${s.host || 'Amaica Media'}${s.dayLabel !== 'Today' ? ' · ' + s.dayLabel : ''}</p>
-        </div>
-        <button class="rc-remind-btn" id="remind-dyn-${i}" onclick="setReminder('dyn-${i}',this)">Remind</button>
-      </div>`).join('');
-  } else if (rcList) {
-    rcList.innerHTML = `<div class="rc-show-row"><span class="rc-time">—</span><div class="rc-show-info"><p class="rc-show-name">Off Air</p><p class="rc-show-host">Amaica Media 98.7 FM</p></div></div>`;
-  }
-
-  // ── Events screen live card ────────────────────────────────
-  const evTitle = document.getElementById('ev-live-title');
-  if (evTitle) evTitle.textContent = current
-    ? `${current.name}${current.host ? ' — ' + current.host : ''}`
-    : 'Amaica Media 98.7 FM';
-}
-
-// Sync on load then every 60 seconds
-syncScheduleUI();
-setInterval(syncScheduleUI, 60000);
-
-
-// ── STREAK FREEZE ─────────────────────────────────────────────────
-function buyStreakFreeze() {
-  const cost = 500;
-  const currentPts = window._profile?.points ?? window._localPoints;
-  if (currentPts < cost) {
-    showToast(`Need ${(cost - currentPts).toLocaleString()} more pts for a Freeze!`, 'error');
+// ── REFINED STAFF VERIFICATION (checkCode) ────────────────────
+window.checkCode = async function () {
+  const code    = (document.getElementById('verify-input')?.value || '').trim().toUpperCase();
+  const display = document.getElementById('verify-result-display');
+  if (!display || !code) return;
+
+  display.innerHTML = `<p style="text-align:center;opacity:0.5;padding:20px 0;">Searching the hearth…</p>`;
+
+  if (!window._sb) {
+    display.innerHTML = `<p style="color:var(--c-fire);text-align:center;font-weight:800;">⚠️ Backend not connected</p>`;
     return;
   }
-  if (window._hasStreakFreeze) {
-    showToast('You already have a Streak Freeze active! ❄️', 'info');
-    return;
-  }
-  // Deduct points
-  if (window._currentUser) {
-    window.sbEarnPoints(-cost, 'Purchased Streak Freeze');
-  } else {
-    window._localPoints -= cost;
-    updateLocalUI();
-    saveLocal();
-  }
-  window._hasStreakFreeze = true;
-  saveLocal();
-  showToast('Streak Freeze Active! ❄️', 'ac_unit');
-  renderRewardsStore();
-  // Update freeze button state
-  const btn = document.getElementById('freeze-btn');
-  if (btn) {
-    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">check_circle</span> Freeze Active ❄️';
-    btn.disabled = true;
-    btn.style.opacity = '.6';
-  }
-}
 
-// ── GEAR REWARDS ─────────────────────────────────────────────────
-const GEAR_REWARDS = [
-  { id: 'tshirt',      name: 'Amaica Leaf T-Shirt',         price: 2000, referralsNeeded: 3,  icon: '👕', desc: 'Forest green · unisex' },
-  { id: 'halfjacket',  name: 'Amaica Forest Half-Jacket',   price: 5000, referralsNeeded: 7,  icon: '🧥', desc: 'Limited run · embroidered logo' },
-  { id: 'hoodie',      name: 'The Pulse Hoodie',            price: 8000, referralsNeeded: 12, icon: '🫱', desc: 'Super Fan exclusive · numbered' },
-];
+  const { data, error } = await window._sb
+    .from('redemptions')
+    .select('*, profiles(username)')
+    .eq('code', code)
+    .single();
 
-function renderRewardsStore() {
-  const grid = document.getElementById('gear-grid');
-  if (!grid) return;
-  const userPts  = window._profile?.points        ?? window._localPoints;
-  const userRefs = window._profile?.referrals_made ?? 0;
-  grid.innerHTML = GEAR_REWARDS.map(item => {
-    const canAfford  = userPts  >= item.price;
-    const hasRefs    = userRefs >= item.referralsNeeded;
-    const unlocked   = canAfford && hasRefs;
-    const lockLabel  = !canAfford
-      ? `${(item.price - userPts).toLocaleString()} more pts needed`
-      : `Refer ${item.referralsNeeded - userRefs} more friends`;
-    return `
-      <div class="gear-card${unlocked ? '' : ' gear-locked'}" onclick="${unlocked ? `claimGear('${item.id}')` : ''}">
-        <div class="gear-img">${item.icon}</div>
-        <div class="gear-info">
-          <h4>${item.name}</h4>
-          <p>${item.desc}</p>
-          ${!unlocked ? `<p style="color:var(--c-error);font-size:.62rem;margin-top:2px;">🔒 ${lockLabel}</p>` : ''}
-        </div>
-        <div class="gear-price">
-          <span>${item.price.toLocaleString()}</span>
-          <small>pts + ${item.referralsNeeded} refs</small>
-          ${unlocked ? `<button class="btn-primary" style="margin-top:6px;padding:5px 12px;font-size:.66rem;" onclick="event.stopPropagation();claimGear('${item.id}')">Claim</button>` : ''}
-        </div>
+  if (error || !data) {
+    display.innerHTML = `
+      <div style="text-align:center;padding:20px 0;">
+        <span class="section-label" style="color:var(--c-fire);">Code Not Found</span>
+        <p style="font-size:1.8rem;margin:8px 0;">⚠️</p>
+        <p style="opacity:0.5;font-size:0.85rem;">This code does not exist in the system.</p>
       </div>`;
-  }).join('');
-}
-
-function claimGear(itemId) {
-  const item = GEAR_REWARDS.find(g => g.id === itemId);
-  if (!item) return;
-  const userPts  = window._profile?.points        ?? window._localPoints;
-  const userRefs = window._profile?.referrals_made ?? 0;
-  if (userPts  < item.price)              { showToast(`Need ${(item.price - userPts).toLocaleString()} more pts!`, 'error'); return; }
-  if (userRefs < item.referralsNeeded)    { showToast(`Refer ${item.referralsNeeded - userRefs} more friends to unlock!`, 'lock'); return; }
-  // Deduct & confirm
-  playBurnSound();
-  if (window._currentUser) {
-    window.sbEarnPoints(-item.price, `Claimed gear: ${item.name}`);
-  } else {
-    window._localPoints -= item.price;
-    updateLocalUI(); saveLocal();
+    return;
   }
-  showToast(`🎉 ${item.name} voucher sent! Check your email.`, 'celebration');
-  renderRewardsStore();
-}
 
-// ── FIRE PARTICLES ────────────────────────────────────────────────
-let _fireInterval = null;
-function createFireParticles() {
-  const container = document.querySelector('.loyalty-container');
-  if (!container || (window._localStreak ?? 0) < 3) return;
-  if (_fireInterval) return; // already running
-  _fireInterval = setInterval(() => {
-    const p = document.createElement('div');
-    p.className = 'fire-particle';
-    p.style.left   = (Math.random() * 80 + 10) + '%';
-    p.style.bottom = '20px';
-    p.style.background = Math.random() > 0.5 ? '#ff4500' : 'var(--brand-green-leaf)';
-    p.style.animationDuration = (0.6 + Math.random() * 0.6) + 's';
-    container.appendChild(p);
-    setTimeout(() => p.remove(), 1200);
-  }, 180);
-}
-function stopFireParticles() {
-  clearInterval(_fireInterval);
-  _fireInterval = null;
-}
+  const isClaimed = data.status === 'claimed';
+  display.innerHTML = `
+    <div style="text-align:center;animation:screenIn 0.4s cubic-bezier(0.22,1,0.36,1) both;">
+      <span class="section-label" style="color:${isClaimed ? 'var(--c-error)' : 'var(--c-fire)'};">
+        ${isClaimed ? 'Already Collected' : 'Verification Success'}
+      </span>
+      <h3 style="font-family:var(--font-display);font-size:1.5rem;font-weight:800;margin:10px 0 6px;">${data.item_name}</h3>
+      <p style="opacity:0.6;font-size:0.85rem;">Listener: <strong>${data.profiles?.username || 'Guest'}</strong></p>
+      ${!isClaimed
+        ? `<button onclick="confirmCollection('${data.id}')"
+             style="margin-top:28px;background:transparent;border:1px solid var(--c-fire);color:var(--c-fire);
+                    padding:12px 30px;border-radius:30px;font-weight:800;font-size:0.9rem;cursor:pointer;"
+             onmouseover="this.style.background='rgba(232,65,24,0.12)'"
+             onmouseout="this.style.background='transparent'">
+             MARK AS HANDED OVER
+           </button>`
+        : `<p style="margin-top:20px;font-size:0.75rem;opacity:0.35;">
+             Collected on ${new Date(data.updated_at).toLocaleDateString()}
+           </p>`}
+    </div>`;
+};
 
-// ── SECRET STREAK REWARD ──────────────────────────────────────────
-function checkSecretReward() {
-  const streak = window._profile?.streak ?? window._localStreak ?? 0;
-  const card   = document.getElementById('secret-streak-reward');
-  if (!card) return;
-  if (streak >= 7) {
-    card.style.display = 'block';
-    // Trigger pop animation by toggling class
-    card.classList.remove('animate-reveal');
-    requestAnimationFrame(() => card.classList.add('animate-reveal'));
-    createFireParticles();
-  } else {
-    card.style.display = 'none';
-    stopFireParticles();
+// ── VERSION-TAP ADMIN ACCESS ──────────────────────────────────
+// Tap the version label 5× in Settings → enter PIN from config.js
+(function () {
+  let _taps = 0, _tapTimer = null;
+  function initVersionTap() {
+    const el = document.querySelector('.version-tap');
+    if (!el) { setTimeout(initVersionTap, 200); return; }
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      _taps++;
+      clearTimeout(_tapTimer);
+      _tapTimer = setTimeout(() => { _taps = 0; }, 3000);
+      if (_taps >= 5) {
+        _taps = 0;
+        const pin = prompt('Enter Staff PIN:');
+        if (pin === null) return;
+        if (pin === (window.APP_CONFIG?.ADMIN_PIN || '1234')) {
+          if (window.toggleAdmin) toggleAdmin(true);
+        } else {
+          if (window.showToast) showToast('Incorrect PIN', 'lock');
+        }
+      }
+    });
   }
-  // Also update freeze button state on profile load
-  const btn = document.getElementById('freeze-btn');
-  if (btn && window._hasStreakFreeze) {
-    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">check_circle</span> Freeze Active ❄️';
-    btn.disabled = true;
-    btn.style.opacity = '.6';
-  }
-}
-
-// ── INIT ─────────────────────────────────────────────────────────
-initChat();
-renderLeaderboard();
-renderRewardsStore();
-if (typeof renderAuthState !== 'undefined') renderAuthState();
-syncLocalProfileUI();
-initReveal();
+  document.addEventListener('DOMContentLoaded', initVersionTap);
+})();
 </script>
+
 </body>
-</html>
