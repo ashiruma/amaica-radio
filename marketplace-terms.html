@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marketplace Terms — Amaica Media</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080808; --surface:#111; --surface2:#1a1a1a;
+  --border:rgba(255,255,255,0.07); --primary:#e84118; --gold:#fbc531;
+  --text:#f0f0f0; --muted:rgba(255,255,255,0.38);
+  --font-d:'Source Sans 3',sans-serif; --font-b:Verdana,Geneva,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+.shell{max-width:680px;margin:0 auto;padding:60px 24px 100px}
+.doc-header{margin-bottom:56px}
+.doc-tag{display:inline-block;font-family:var(--font-d);font-size:.62rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--primary);border:1px solid rgba(232,65,24,.35);border-radius:20px;padding:4px 12px;margin-bottom:18px}
+.doc-title{font-family:var(--font-d);font-size:clamp(2rem,6vw,3rem);font-weight:800;line-height:1.1;margin-bottom:14px}
+.doc-meta{font-size:.8rem;color:var(--muted)}
+.doc-meta span{margin-right:18px}
+.divider{height:1px;background:var(--border);margin:40px 0}
+.back-btn{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:7px 14px;margin-bottom:40px;transition:color .2s,border-color .2s}
+.back-btn:hover{color:var(--text);border-color:rgba(255,255,255,.2);text-decoration:none}
+.back-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sec{margin-bottom:40px}
+.sec-num{font-family:var(--font-d);font-size:.6rem;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--primary);margin-bottom:6px}
+.sec h2{font-family:var(--font-d);font-size:1.1rem;font-weight:800;margin-bottom:12px}
+.sec p{color:rgba(255,255,255,.75);margin-bottom:10px}
+.sec p:last-child{margin-bottom:0}
+.sec ul{color:rgba(255,255,255,.75);padding-left:18px;margin-bottom:10px}
+.sec ul li{margin-bottom:6px}
+.callout{background:rgba(232,65,24,.08);border:1px solid rgba(232,65,24,.2);border-radius:12px;padding:16px 20px;margin:16px 0}
+.callout p{color:rgba(255,255,255,.8);margin:0;font-size:.88rem}
+.callout.gold{background:rgba(251,197,49,.07);border-color:rgba(251,197,49,.25)}
+.callout.gold p{color:rgba(255,255,255,.8)}
+
+/* reward cards */
+.reward-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
+@media(max-width:520px){.reward-grid{grid-template-columns:1fr 1fr}}
+.reward-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center}
+.reward-card .icon{font-size:1.8rem;margin-bottom:8px}
+.reward-card .name{font-family:var(--font-d);font-size:.78rem;font-weight:800;margin-bottom:4px}
+.reward-card .pts{font-size:.72rem;color:var(--gold)}
+.reward-card .refs{font-size:.65rem;color:var(--muted);margin-top:2px}
+
+.table-wrap{overflow-x:auto;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;font-family:var(--font-d);font-size:.62rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--border)}
+td{padding:12px 14px;border-bottom:1px solid var(--border);color:rgba(255,255,255,.72);vertical-align:top}
+tr:last-child td{border-bottom:none}
+
+.doc-footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.doc-footer p{font-size:.72rem;color:var(--muted)}
+.doc-footer .brand{font-family:var(--font-d);font-weight:800;font-size:.8rem;color:var(--text)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <a class="back-btn" href="index.html">
+    <svg viewBox="0 0 16 16"><polyline points="10 3 5 8 10 13"/></svg>
+    Back
+  </a>
+
+  <header class="doc-header">
+    <div class="doc-tag">Legal</div>
+    <h1 class="doc-title">Marketplace<br>Terms</h1>
+    <div class="doc-meta">
+      <span>Effective: 1 January 2025</span>
+      <span>Version 1.0</span>
+    </div>
+  </header>
+
+  <div class="callout">
+    <p>These terms govern how you earn Pulse Points, redeem rewards, and claim gear. They form part of our main Terms of Service.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- 1 -->
+  <div class="sec">
+    <div class="sec-num">01</div>
+    <h2>Nature of Pulse Points</h2>
+    <p>Pulse Points are a <strong>non-monetary loyalty credit</strong>. They are:</p>
+    <ul>
+      <li>Not currency, not a financial instrument, and not redeemable for cash.</li>
+      <li>Not transferable between accounts.</li>
+      <li>Not inheritable or assignable.</li>
+      <li>Subject to forfeiture if your account is suspended for abuse.</li>
+    </ul>
+    <p>This design is consistent with the <strong>National Payment System Act (Kenya)</strong>, which exempts loyalty points from e-money regulation provided they have no cash-out mechanism.</p>
+  </div>
+
+  <!-- 2 -->
+  <div class="sec">
+    <div class="sec-num">02</div>
+    <h2>How Points Are Earned</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Action</th><th>Points</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Listening (per minute)</td><td>10 pts</td><td>Awarded each minute the stream is active</td></tr>
+          <tr><td>Sending a chat message</td><td>5 pts</td><td>Live community chat only</td></tr>
+          <tr><td>Daily streak bonus</td><td>10 × streak (max 100)</td><td>Awarded on first listen of each day</td></tr>
+          <tr><td>Stoking the fire</td><td>1 pt</td><td>Per vibe tap</td></tr>
+          <tr><td>Voting in a poll</td><td>10 pts</td><td>One vote per poll</td></tr>
+          <tr><td>Setting a show reminder</td><td>5 pts</td><td>Per reminder set</td></tr>
+          <tr><td>Referring a friend</td><td>Bonus (variable)</td><td>Friend must create an account</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A <strong>scarcity multiplier</strong> is applied: as live listener count grows, per-action point values decrease proportionally. This keeps the points economy balanced.</p>
+  </div>
+
+  <!-- 3 -->
+  <div class="sec">
+    <div class="sec-num">03</div>
+    <h2>Tiers</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Tier</th><th>Points Required</th><th>Benefits</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>🥉 Bronze</td><td>0</td><td>Access to Marketplace</td></tr>
+          <tr><td>🥈 Silver</td><td>500</td><td>Priority support response</td></tr>
+          <tr><td>🥇 Gold</td><td>2,000</td><td>Exclusive poll access</td></tr>
+          <tr><td>🌟 Super Fan</td><td>5,000</td><td>Shoutout eligibility; gear discounts</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Tier thresholds may be adjusted with 14 days' notice. Your tier is re-evaluated at the start of each calendar month based on your rolling 90-day points balance.</p>
+  </div>
+
+  <!-- 4 -->
+  <div class="sec">
+    <div class="sec-num">04</div>
+    <h2>Streak Freeze</h2>
+    <p>A Streak Freeze (500 pts) protects your daily streak for one missed day. Rules:</p>
+    <ul>
+      <li>Only one Freeze may be held at a time.</li>
+      <li>A Freeze is consumed automatically on the first day you miss.</li>
+      <li>Freeze purchase is non-refundable once used.</li>
+      <li>Points deducted for a Freeze are not restored if the account is later deleted.</li>
+    </ul>
+  </div>
+
+  <!-- 5 -->
+  <div class="sec">
+    <div class="sec-num">05</div>
+    <h2>Digital Rewards (Airtime)</h2>
+    <p>Airtime rewards are fulfilled by <strong>Africa's Talking</strong> to Safaricom numbers only at this time. By requesting airtime you consent to us sharing your mobile number with Africa's Talking solely for disbursement.</p>
+    <ul>
+      <li>Airtime value = points redeemed ÷ 2 (e.g. 200 pts = KES 100 airtime).</li>
+      <li>Minimum redemption: 200 pts.</li>
+      <li>Maximum per day: 2,000 pts (KES 1,000 airtime).</li>
+      <li>Delivery is typically instant; allow up to 24 hours. If delivery fails, points are reinstated.</li>
+    </ul>
+    <div class="callout gold">
+      <p>Airtime rewards are subject to availability and Kenya's applicable mobile money regulations. We reserve the right to suspend airtime redemption if regulatory requirements change.</p>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="sec">
+    <div class="sec-num">06</div>
+    <h2>Physical Gear Rewards</h2>
+    <div class="reward-grid">
+      <div class="reward-card">
+        <div class="icon">👕</div>
+        <div class="name">Leaf T-Shirt</div>
+        <div class="pts">2,000 pts</div>
+        <div class="refs">+ 3 referrals</div>
+      </div>
+      <div class="reward-card">
+        <div class="icon">🧥</div>
+        <div class="name">Forest Jacket</div>
+        <div class="pts">5,000 pts</div>
+        <div class="refs">+ 7 referrals</div>
+      </div>
+      <div class="reward-card">
+        <div class="icon">🫱</div>
+        <div class="name">Pulse Hoodie</div>
+        <div class="pts">8,000 pts</div>
+        <div class="refs">+ 12 referrals</div>
+      </div>
+    </div>
+    <ul>
+      <li>Both the point balance <strong>and</strong> the referral count must be met simultaneously.</li>
+      <li>Upon claiming, a voucher code is emailed. Collect the item at <strong>Kakamega Station</strong> within <strong>90 days</strong>.</li>
+      <li>Items are subject to size and stock availability. We will contact you to confirm before dispatch.</li>
+      <li>Gear rewards cannot be exchanged for points, cash, or other items.</li>
+      <li>Lost voucher codes can be reissued once; contact support within the 90-day window.</li>
+    </ul>
+  </div>
+
+  <!-- 7 -->
+  <div class="sec">
+    <div class="sec-num">07</div>
+    <h2>Abuse &amp; Fraud</h2>
+    <p>The following actions will result in immediate point forfeiture and account suspension:</p>
+    <ul>
+      <li>Automated or scripted listening, tapping, or chatting to accumulate points.</li>
+      <li>Creating multiple accounts to exploit referral bonuses.</li>
+      <li>Using VPNs or proxies to circumvent scarcity multipliers.</li>
+      <li>Redeeming rewards under false pretences.</li>
+    </ul>
+    <p>Suspected fraud may be reported to the relevant authorities. Amaica Media reserves the right to recover the value of fraudulently obtained rewards.</p>
+  </div>
+
+  <!-- 8 -->
+  <div class="sec">
+    <div class="sec-num">08</div>
+    <h2>Tax</h2>
+    <p>Pulse Points and rewards are provided as a loyalty benefit. Under current Kenyan Revenue Authority guidance, loyalty rewards of this nature are not classified as taxable income for the recipient. This may change. You are responsible for any personal tax obligations that arise.</p>
+  </div>
+
+  <!-- 9 -->
+  <div class="sec">
+    <div class="sec-num">09</div>
+    <h2>Changes to the Programme</h2>
+    <p>We may modify point values, tier thresholds, or available rewards at any time. Changes affecting existing redeemable balances will be communicated in-app with at least <strong>14 days' notice</strong>. Continued use after the notice period constitutes acceptance.</p>
+  </div>
+
+  <!-- 10 -->
+  <div class="sec">
+    <div class="sec-num">10</div>
+    <h2>Contact</h2>
+    <p>Redemption issues: <a href="mailto:info@amaicamedia.com">info@amaicamedia.com</a> or WhatsApp <a href="https://wa.me/254715505284">+254 715 505 284</a>.</p>
+  </div>
+
+  <div class="doc-footer">
+    <span class="brand">Amaica Media · 98.7 FM</span>
+    <p>© 2025 Amaica Media. All rights reserved.</p>
+  </div>
+
+</div>
+</body>
+</html>

@@ -134,28 +134,91 @@
     if (window._profile) window._profile.messages_sent = newCount;
   };
 
-  // Live chat subscription
+  // ── Realtime: live chat ──────────────────────────────────────
   const chatChannel = sb.channel('live-chat')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
       const m = payload.new;
+      // Skip own messages — already appended optimistically in sendChat()
       if (m.user_id === window._currentUser?.id) return;
       if (window.appendChatMsg) appendChatMsg({
         u: m.username, text: m.text, own: false,
         time: new Date(m.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-        pts: true
+        pts: false
       });
+      // Also update home preview
+      const preview = document.getElementById('home-chat-preview');
+      if (preview) {
+        const div = document.createElement('div');
+        div.className = 'cpm';
+        div.innerHTML = '<div class="cpm-av">' + (m.username || '?').charAt(0).toUpperCase() + '</div><div class="cpm-body"><p class="cpm-user">' + (m.username || 'Listener') + '</p><p class="cpm-text">' + m.text + '</p></div>';
+        preview.appendChild(div);
+        while (preview.children.length > 5) preview.removeChild(preview.firstChild);
+        preview.scrollTop = preview.scrollHeight;
+      }
       if (m.text.includes('📣 SHOUTOUT') && window.showLiveShoutout) {
         window.showLiveShoutout(m.username, m.text.replace('📣 SHOUTOUT:', '').trim());
       }
-    }).subscribe();
+    })
+    .subscribe((status, err) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Realtime] Chat channel connected');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[Realtime] Chat channel error:', status, err);
+      }
+    });
+
+  // ── Realtime: leaderboard (profiles points change) ───────────
+  const lbChannel = sb.channel('live-leaderboard')
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => {
+      // Debounce — avoid rapid re-renders if many users earn points at once
+      clearTimeout(window._lbDebounce);
+      window._lbDebounce = setTimeout(() => {
+        const lbVisible = document.getElementById('r-leaderboard')?.style.display !== 'none';
+        if (lbVisible && window.loadLeaderboard) window.loadLeaderboard();
+      }, 800);
+    })
+    .subscribe((status, err) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Realtime] Leaderboard channel connected');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[Realtime] Leaderboard channel error:', status, err);
+      }
+    });
+
+  // ── Load recent chat history on community screen open ──────
+  window.loadRecentMessages = async () => {
+    const { data } = await sb.from('messages')
+      .select('username, text, created_at, user_id')
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (!data) return;
+    const c = document.getElementById('chat-messages'); if (!c) return;
+    c.innerHTML = '';
+    data.reverse().forEach(m => {
+      if (window.appendChatMsg) appendChatMsg({
+        u: m.username,
+        text: m.text,
+        own: m.user_id === window._currentUser?.id,
+        time: new Date(m.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+        pts: false
+      });
+    });
+    if (!data.length) {
+      c.innerHTML = '<div class="chat-empty-state"><span class="material-symbols-outlined" style="font-size:2rem;opacity:.3;">forum</span><p>The conversation starts here.</p><p style="font-size:.7rem;opacity:.5;">Be the first to say something — your message goes live instantly.</p></div>';
+    }
+  };
 
   // ── Leaderboard ──────────────────────────────────────────────
   window.loadLeaderboard = async () => {
-    const { data } = await sb.from('profiles')
-      .select('username, points, streak, tier')
-      .order('points', { ascending: false })
-      .limit(20);
-    if (data && window.renderLeaderboard) renderLeaderboard(data);
+    try {
+      const { data, error } = await sb.from('profiles')
+        .select('username, points, streak, tier')
+        .order('points', { ascending: false })
+        .limit(20);
+      if (error) { console.warn('Leaderboard fetch error:', error); return; }
+      // Include everyone — even 0-point users — so a single user appears at #1
+      if (window.renderLeaderboard) renderLeaderboard(data || []);
+    } catch(e) { console.warn('loadLeaderboard failed:', e); }
   };
 
   // ── Referral ──────────────────────────────────────────────────

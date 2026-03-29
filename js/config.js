@@ -46,7 +46,7 @@ window.APP_CONFIG = {
   }
   CONTACT_EMAIL: 'info@amaicamedia.com',
   CALL_IN_NUMBER: '+254715505284',
-  LEGAL_BASE_URL: 'https://amaicamedia.com/legal',
+  LEGAL_BASE_URL: '',
   SOCIALS: {
     facebook: 'https://facebook.com/amaicamedia',
     twitter: 'https://twitter.com/amaicamedia',

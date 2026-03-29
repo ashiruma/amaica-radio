@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
-//  AMAICA PULSE — APP.JS  v8
+//  AMAICA PULSE — APP.JS  v9 (consolidated)
 //  Navigation, chat, local storage, UI state, schedule engine,
 //  fire pit / inferno mode, ember particles, vibe engine,
-//  sponsorship system, streak gear, peak chart, online tracking
+//  sponsorship system, streak gear, peak chart, online tracking,
+//  polls engine, call-in modal, contact modal, footer renderer
 // ═══════════════════════════════════════════════════════════════
 (function () {
 
@@ -54,7 +55,7 @@
     showToast(`Day ${window._localStreak} Streak! +${bonus} pts`, 'workspace_premium');
   };
 
-  // ── Points UI ────────────────────────────────────────────────
+  // ── Points UI ─────────────────────────────────────────────────
   function animateCounter(el, from, to, duration = 600) {
     if (!el) return;
     const start = performance.now();
@@ -77,7 +78,7 @@
     const pp = document.getElementById('profile-pts'); if (pp) pp.textContent = f + ' pts';
     const lb = document.getElementById('lb-your-pts'); if (lb) lb.textContent = f + ' pts';
 
-    // Update tier progress bar
+    // Tier progress bar
     const tiers = window.APP_CONFIG?.TIERS || { bronze: 0, silver: 500, gold: 2000, superfan: 5000 };
     const tierKeys = Object.keys(tiers);
     let currentTier = 'bronze', nextTier = 'silver', nextPts = 500;
@@ -93,9 +94,9 @@
     const bar = document.getElementById('tier-progress-bar');
     if (bar) bar.style.width = pct + '%';
     const lbl = document.getElementById('tier-next-label');
-    if (lbl) lbl.textContent = nextTier ? `Next: ${nextTier.charAt(0).toUpperCase() + nextTier.slice(1)} at ${nextPts.toLocaleString()} pts` : '🏆 Max Tier Reached!';
-
-    // Highlight active tier badge
+    if (lbl) lbl.textContent = nextTier
+      ? `Next: ${nextTier.charAt(0).toUpperCase() + nextTier.slice(1)} at ${nextPts.toLocaleString()} pts`
+      : '🏆 Max Tier Reached!';
     document.querySelectorAll('.tier-badge').forEach(b => {
       b.classList.toggle('active', b.dataset.tier === currentTier);
     });
@@ -117,7 +118,6 @@
     }
   };
 
-  // Premium "STOKED" pop — fire-styled, shows above fire meter
   function triggerPremiumPop(pts) {
     if (pts <= 0) return;
     const p = document.createElement('div');
@@ -201,9 +201,7 @@
     const val = document.getElementById('fire-val');
     if (fill) fill.style.width = '100%';
     if (val) val.textContent = 'MAX';
-    // Particle rain during inferno
     const infernoBurst = setInterval(() => createEmbers(true), 100);
-    // Cool down after 30 minutes
     setTimeout(() => {
       clearInterval(infernoBurst);
       if (mc) mc.style.boxShadow = 'none';
@@ -257,48 +255,35 @@
     }
   };
 
-  // Continuous trickle — always active, matching index_5 behaviour
+  // Continuous trickle — always active
   setInterval(createEmbers, 300);
 
   // ══════════════════════════════════════════════════════════════
-  //  💗 VIBE ENGINE  (enhanced version from index_5)
+  //  💗 VIBE ENGINE
   // ══════════════════════════════════════════════════════════════
   let globalVibe = 0;
 
   window.sendPulseVibe = function () {
     globalVibe += 10;
-    // 1. Physical feedback
     if (navigator.vibrate) navigator.vibrate([20, 30, 20]);
-    // 2. Heatwave flash
     const mc = document.getElementById('main-content');
     if (mc) {
       mc.style.transition = 'background 0.1s ease';
       mc.style.background = 'radial-gradient(circle at 50% 40%, rgba(232,65,24,0.45) 0%, #050505 80%)';
     }
-    // 3. Shake the play button
     const playBtn = document.querySelector('.play-circle-wrap');
     if (playBtn) {
       playBtn.style.transition = 'transform 0.1s cubic-bezier(0.175,0.885,0.32,1.275)';
       playBtn.style.transform = 'scale(1.15) rotate(3deg)';
     }
-    // 4. Ember burst
     for (let i = 0; i < 15; i++) setTimeout(() => createEmbers(true), i * 40);
-    // 5. Cool down
     setTimeout(() => {
-      if (mc) {
-        mc.style.transition = 'background 2.5s ease';
-        mc.style.background = '';
-      }
-      if (playBtn) {
-        playBtn.style.transition = 'transform 0.5s ease';
-        playBtn.style.transform = '';
-      }
+      if (mc) { mc.style.transition = 'background 2.5s ease'; mc.style.background = ''; }
+      if (playBtn) { playBtn.style.transition = 'transform 0.5s ease'; playBtn.style.transform = ''; }
     }, 200);
-    // 6. Points & toast
     sbEarnPoints(1, 'Stoked the fire');
     updateFireMeter(5);
     showToast('Fire stoked! 🔥', 'local_fire_department');
-    // 7. Vibe decay
     clearTimeout(window.vDecay);
     window.vDecay = setTimeout(() => {
       globalVibe = 0;
@@ -307,7 +292,7 @@
   };
 
   // ══════════════════════════════════════════════════════════════
-  //  🏢 DYNAMIC SPONSORSHIP SYSTEM
+  //  🏢 SPONSORSHIP SYSTEM
   // ══════════════════════════════════════════════════════════════
   let _activeSponsor = null;
 
@@ -319,75 +304,47 @@
         .from('sponsors')
         .select('*')
         .eq('active', true)
-        .lte('start_date', now)
-        .gte('end_date', now)
         .order('priority', { ascending: false });
-      if (!data || data.length === 0) return;
-      // Pick highest priority active sponsor
-      _activeSponsor = data[0];
-      window.applySponsor(_activeSponsor);
-      // Rotate sponsors every 5 minutes if multiple
-      if (data.length > 1) {
+      const active = (data || []).filter(s =>
+        (!s.start_date || s.start_date <= now) && (!s.end_date || s.end_date >= now)
+      );
+      if (!active.length) { window._revertSponsor(); return; }
+      _activeSponsor = active[0];
+      window._applySponsor(_activeSponsor);
+      if (active.length > 1) {
         let idx = 0;
         setInterval(() => {
-          idx = (idx + 1) % data.length;
-          _activeSponsor = data[idx];
-          window.applySponsor(_activeSponsor);
+          idx = (idx + 1) % active.length;
+          _activeSponsor = active[idx];
+          window._applySponsor(_activeSponsor);
         }, 300000);
       }
-    } catch (e) { console.warn('[sponsors] load failed:', e); }
-  };
-
-  window.applySponsor = function (s) {
-    if (!s) return;
-    document.documentElement.style.setProperty('--sponsor-color', s.color || '#76b82a');
-    document.documentElement.style.setProperty('--c-primary', s.color || '#76b82a');
-    // Update sponsor banner if it exists
-    const banner = document.getElementById('sponsor-banner');
-    if (banner) {
-      banner.innerHTML = `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;
-                    background:${s.color}18;border-bottom:1px solid ${s.color}33;">
-          ${s.logo_url ? `<img src="${s.logo_url}" style="height:24px;object-fit:contain;">` : ''}
-          <span style="font-size:.68rem;font-weight:700;color:${s.color};">
-            ${s.show_label || 'Powered by'} ${s.name}
-          </span>
-          ${s.cta_url ? `<a href="${s.cta_url}" target="_blank"
-            style="margin-left:auto;font-size:.6rem;padding:4px 10px;border-radius:20px;
-                   background:${s.color};color:#fff;text-decoration:none;font-weight:700;">
-            ${s.cta_text || 'Learn More'}
-          </a>` : ''}
-        </div>`;
-      banner.style.display = 'block';
-    }
-    showToast(`Powered by ${s.name}`, 'verified');
-  };
-
-  window.setSponsor = function () { if (window.loadSponsors) loadSponsors(); };
-
-  window.loadSponsors = async function () {
-    if (!window._sb) return;
-    try {
-      const now = new Date().toISOString();
-      const { data } = await window._sb.from('sponsors').select('*').eq('active', true).order('priority', { ascending: false });
-      const active = (data || []).filter(s => (!s.start_date || s.start_date <= now) && (!s.end_date || s.end_date >= now));
-      if (!active.length) { window._revertSponsor(); return; }
-      window._applySponsor(active[0]);
-      if (active.length > 1) { let i = 0; setInterval(() => { i = (i + 1) % active.length; window._applySponsor(active[i]); }, 300000); }
     } catch (e) { console.warn('[sponsors]', e); }
   };
 
   window._applySponsor = function (s) {
+    if (!s) return;
     document.documentElement.style.setProperty('--c-primary', s.color || '#e84118');
     const b = document.getElementById('sponsor-banner');
-    if (b) { b.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;background:${s.color}18;border-bottom:1px solid ${s.color}33;"><span style="font-size:.68rem;font-weight:700;color:${s.color};">${s.show_label || 'Powered by'} ${s.name}</span>${s.cta_url ? `<a href="${s.cta_url}" target="_blank" style="margin-left:auto;font-size:.6rem;padding:4px 10px;border-radius:20px;background:${s.color};color:#fff;text-decoration:none;font-weight:700;">${s.cta_text || 'Learn More'}</a>` : ''}</div>`; b.style.display = 'block'; }
+    if (b) {
+      b.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;background:${s.color}18;border-bottom:1px solid ${s.color}33;">
+        ${s.logo_url ? `<img src="${s.logo_url}" style="height:24px;object-fit:contain;">` : ''}
+        <span style="font-size:.68rem;font-weight:700;color:${s.color};">${s.show_label || 'Powered by'} ${s.name}</span>
+        ${s.cta_url ? `<a href="${s.cta_url}" target="_blank" style="margin-left:auto;font-size:.6rem;padding:4px 10px;border-radius:20px;background:${s.color};color:#fff;text-decoration:none;font-weight:700;">${s.cta_text || 'Learn More'}</a>` : ''}
+      </div>`;
+      b.style.display = 'block';
+    }
     showToast(`Powered by ${s.name}`, 'verified');
   };
 
   window._revertSponsor = function () {
+    _activeSponsor = null;
     document.documentElement.style.setProperty('--c-primary', '#e84118');
-    const b = document.getElementById('sponsor-banner'); if (b) { b.innerHTML = ''; b.style.display = 'none'; }
+    const b = document.getElementById('sponsor-banner');
+    if (b) { b.innerHTML = ''; b.style.display = 'none'; }
   };
+
+  window.setSponsor = function () { if (window.loadSponsors) loadSponsors(); };
 
   // ══════════════════════════════════════════════════════════════
   //  ❄️ STREAK FREEZE + GEAR REWARDS
@@ -401,14 +358,8 @@
   window.buyStreakFreeze = function () {
     const cost = 500;
     const currentPts = window._profile?.points ?? window._localPoints;
-    if (currentPts < cost) {
-      showToast(`Need ${(cost - currentPts).toLocaleString()} more pts for a Freeze!`, 'error');
-      return;
-    }
-    if (window._hasStreakFreeze) {
-      showToast('You already have a Streak Freeze active! ❄️', 'info');
-      return;
-    }
+    if (currentPts < cost) { showToast(`Need ${(cost - currentPts).toLocaleString()} more pts for a Freeze!`, 'error'); return; }
+    if (window._hasStreakFreeze) { showToast('You already have a Streak Freeze active! ❄️', 'info'); return; }
     if (window._currentUser) {
       window.sbEarnPoints(-cost, 'Purchased Streak Freeze');
     } else {
@@ -547,7 +498,6 @@
     ctx.stroke();
   };
 
-  // Feed live listener data into the chart
   window._updateListenerChart = function (count) {
     if (count > peak) {
       peak = count;
@@ -559,40 +509,31 @@
     drawChart();
   };
 
-  // Analytics history fetch
   window.loadAnalytics = async function () {
     try {
       const res = await fetch('https://dmscfpnkswmfbfgcuwwb.supabase.co/functions/v1/analytics');
       const data = await res.json();
       historyData = data.map(d => d.count).reverse().slice(-30);
       drawChart();
-    } catch (e) {
-      // Silently skip — chart stays empty until live data arrives
-    }
+    } catch (e) { }
   };
 
   // ══════════════════════════════════════════════════════════════
-  //  👥 UNIFIED STATS ENGINE (presence + live listener count)
+  //  👥 UNIFIED STATS ENGINE
   // ══════════════════════════════════════════════════════════════
-  // ── STATS ENGINE ─────────────────────────────────────────────
-  // Stable session UID: generated once, reused on every heartbeat.
-  // Bug fixed: the old code called Math.random() inside syncStats(),
-  // creating a new guest ID every 15s → phantom rows in online_users.
+  // Stable session UID — generated once, reused on every heartbeat.
   const _sessionUid = window._currentUser?.id
     || 'guest-' + Math.random().toString(36).substr(2, 8);
 
   async function syncStatistics() {
     if (!window._sb) return;
     try {
-      // A. Register / heartbeat this session
       await window._sb.from('online_users').upsert({
         id: _sessionUid,
         user_id: _sessionUid,
         last_seen: new Date().toISOString()
       }, { onConflict: 'id' });
 
-      // B. Fetch live listener count from show_stats
-      // B. Push real stream count to show_stats, then read back
       const streamCount = window._liveListeners ?? 0;
       await window._sb
         .from('show_stats')
@@ -609,22 +550,13 @@
         const listeners = data.listeners ?? 0;
         window._liveListeners = listeners;
         window._hasRealListenerData = true;
-
-        // Update every .listener-count-el element (home, player, admin)
         document.querySelectorAll('.listener-count-el').forEach(el => {
           el.textContent = Number(listeners).toLocaleString();
         });
-        const badge = document.getElementById('live-count-badge');
-        if (badge) badge.textContent = listeners + ' LIVE';
-        const admCount = document.getElementById('adm-live-count');
-        if (admCount) admCount.textContent = Number(listeners).toLocaleString();
-        const lc = document.getElementById('listener-count');
-        if (lc) lc.textContent = Number(listeners).toLocaleString();
-
-        // Feed chart and monetisation engine
-        if (typeof window._updateListenerChart === 'function') {
-          window._updateListenerChart(listeners);
-        }
+        const badge = document.getElementById('live-count-badge'); if (badge) badge.textContent = listeners + ' LIVE';
+        const admCount = document.getElementById('adm-live-count'); if (admCount) admCount.textContent = Number(listeners).toLocaleString();
+        const lc = document.getElementById('listener-count'); if (lc) lc.textContent = Number(listeners).toLocaleString();
+        if (typeof window._updateListenerChart === 'function') window._updateListenerChart(listeners);
         if (typeof runMonetization === 'function') runMonetization(listeners);
       }
     } catch (e) {
@@ -661,7 +593,19 @@
     if (s === 'profile') { syncLoyaltyUI(); checkSecretReward(); }
     if (s === 'home') renderFeed();
     if (s === 'rewards') { renderRewardsList(); renderMarketplace(); renderRewardsStore(); }
-    // Background switch — fiery on home/player, flat elsewhere
+    if (s === 'community') {
+      const cur = getCurrentShow?.();
+      const chatInput = document.getElementById('chat-input');
+      if (chatInput && cur) chatInput.placeholder = `Say hi to ${cur.host || 'the studio'}\u2026`;
+      const chatBox = document.getElementById('chat-messages');
+      // Load real recent messages (supabase-client defines this; no-op if offline)
+      if (window.loadRecentMessages && chatBox && !chatBox._loaded) {
+        chatBox._loaded = true;
+        window.loadRecentMessages();
+      } else if (chatBox) {
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+    }
     if (mc) {
       mc.style.background = (s === 'home' || s === 'player')
         ? 'radial-gradient(circle at 50% 30%, var(--stone-glow, rgba(232,65,24,0.15)), var(--amaica-charcoal, #080808) 70%)'
@@ -670,7 +614,7 @@
     setTimeout(initReveal, 50);
   };
 
-  // ── Toast ────────────────────────────────────────────────────
+  // ── Toast ─────────────────────────────────────────────────────
   window.showToast = function (msg, icon) {
     const c = document.getElementById('toast-container');
     if (!c) return;
@@ -736,12 +680,8 @@
 
   window.redeemPulseItem = async function (name, cost, type) {
     const bal = window._profile?.points ?? window._localPoints;
-    if (bal < cost) {
-      showToast(`Need ${(cost - bal).toLocaleString()} more pts!`, 'error');
-      return;
-    }
+    if (bal < cost) { showToast(`Need ${(cost - bal).toLocaleString()} more pts!`, 'error'); return; }
 
-    // For airtime, ask for phone number
     let phone = null;
     if (type === 'Digital' && name.toLowerCase().includes('airtime')) {
       phone = prompt('Enter your Safaricom number (e.g. 0712345678):');
@@ -751,10 +691,8 @@
     if (confirm(`Redeem ${name} for ${cost} pts?`)) {
       const shortCode = 'AM-' + Math.random().toString(36).substring(2, 6).toUpperCase();
       await sbEarnPoints(-cost, `Redeemed ${name}`);
-
       if (cost >= 1000) triggerInfernoMode(window._profile?.username || 'A Legend');
 
-      // Backend log — save regardless of auth status
       let redemptionId = null;
       if (window._sb) {
         const { data: rd, error: rErr } = await window._sb.from('redemptions').insert({
@@ -768,16 +706,13 @@
         if (rErr) console.warn('[redemption] insert failed:', rErr.message);
         redemptionId = rd?.id;
       }
-      // If airtime — call Edge Function
+
       if (phone && redemptionId) {
         showToast('Sending airtime...', 'check_circle');
         try {
           const res = await fetch(`${window.APP_CONFIG.SUPABASE_URL}/functions/v1/send-airtime`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${window.APP_CONFIG.SUPABASE_ANON}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${window.APP_CONFIG.SUPABASE_ANON}` },
             body: JSON.stringify({ phone, amount: cost / 2, redemption_id: redemptionId })
           });
           const result = await res.json();
@@ -805,8 +740,6 @@
   };
 
   // ── Chat ─────────────────────────────────────────────────────
-  const seedMsgs = []; // No pre-loaded messages — chat is live only, like YouTube/Instagram Live
-
   function buildMsg(m) {
     const d = document.createElement('div');
     d.className = 'cmsg' + (m.own ? ' own' : '');
@@ -816,7 +749,6 @@
 
   window.appendChatMsg = function (m) {
     const c = document.getElementById('chat-messages'); if (!c) return;
-    // Clear empty state on first real message
     const empty = c.querySelector('.chat-empty-state');
     if (empty) empty.remove();
     c.appendChild(buildMsg(m)); c.scrollTop = c.scrollHeight;
@@ -824,7 +756,6 @@
 
   function initChat() {
     const c = document.getElementById('chat-messages'); if (!c) return;
-    // Show empty state — messages populate in real time as listeners send them
     c.innerHTML = `<div class="chat-empty-state">
       <span class="material-symbols-outlined" style="font-size:2rem;opacity:.3;">forum</span>
       <p>The conversation starts here.</p>
@@ -836,12 +767,21 @@
     const inp = document.getElementById('chat-input');
     const txt = inp?.value.trim(); if (!txt) return;
     const c = document.getElementById('chat-messages'); if (!c) return;
+    const name = window._profile?.username || window._localUser || 'You';
     const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    // Clear empty state on first message
-    const empty = c.querySelector('.chat-empty-state');
-    if (empty) empty.remove();
-    c.appendChild(buildMsg({ u: window._profile?.username || window._localUser || 'You', text: txt, own: true, time: t, pts: false }));
+    const empty = c.querySelector('.chat-empty-state'); if (empty) empty.remove();
+    // Append own message immediately (optimistic)
+    c.appendChild(buildMsg({ u: name, text: txt, own: true, time: t, pts: false }));
     c.scrollTop = c.scrollHeight; inp.value = '';
+    // Mirror to home preview
+    const preview = document.getElementById('home-chat-preview');
+    if (preview) {
+      const div = document.createElement('div'); div.className = 'cpm';
+      div.innerHTML = '<div class="cpm-av">' + name.charAt(0).toUpperCase() + '</div><div class="cpm-body"><p class="cpm-user" style="color:var(--c-on-surface);">' + name + '</p><p class="cpm-text">' + txt + '</p></div>';
+      preview.appendChild(div);
+      while (preview.children.length > 5) preview.removeChild(preview.firstChild);
+      preview.scrollTop = preview.scrollHeight;
+    }
     window._localChatMsgs++; updateChatMission(); saveLocal();
     sbEarnPoints(window.APP_CONFIG?.CHAT_PTS || 5, 'Sent message');
     showToast('+' + (window.APP_CONFIG?.CHAT_PTS || 5) + ' Pulse Points!', 'stars');
@@ -885,8 +825,13 @@
 
     const av = document.getElementById('profile-avatar-letter'); if (av) av.textContent = (name.charAt(0) || 'L').toUpperCase();
     const ud = document.getElementById('profile-username-display'); if (ud) ud.textContent = name;
+    // Also target the alternate username element used in some layouts
+    const pun = document.getElementById('p-username'); if (pun) pun.textContent = name;
+    const ppt = document.getElementById('p-points'); if (ppt) ppt.textContent = f;
     const ml = document.getElementById('profile-member-label');
-    if (ml) ml.textContent = window._profile ? 'Cloud synced · Pulse Points Member' : 'Local listener · points saved on this device';
+    if (ml) ml.textContent = window._profile
+      ? 'Cloud synced · Pulse Points Member'
+      : 'Local listener · points saved on this device';
 
     ['points-display', 'points-display-rwd', 'profile-pts-num'].forEach(id => { const e = document.getElementById(id); if (e) e.textContent = f; });
     const pp = document.getElementById('profile-pts'); if (pp) pp.textContent = f + ' pts';
@@ -905,6 +850,50 @@
     } else {
       if (ue) ue.style.display = 'block'; if (li) li.style.display = 'none'; if (as) as.style.display = 'block';
     }
+
+    // ── Legal links — screen-profile (injected once, menu-list style)
+    const profileScreen = document.getElementById('screen-profile');
+    if (profileScreen && !profileScreen.querySelector('.settings-legal-group')) {
+      const links = [
+        { label: 'Terms of Service', slug: 'terms.html' },
+        { label: 'Privacy Policy', slug: 'privacy.html' },
+        { label: 'SLA', slug: 'sla.html' },
+        { label: 'Marketplace Terms', slug: 'marketplace-terms.html' },
+      ];
+      const legalGroup = document.createElement('div');
+      legalGroup.className = 'settings-legal-group';
+      legalGroup.style.cssText = 'margin-top:32px;padding:0 16px;';
+      legalGroup.innerHTML = `
+        <h4 style="font-size:.7rem;text-transform:uppercase;letter-spacing:.15em;color:rgba(255,255,255,0.4);margin-bottom:12px;font-weight:800;">Legal & Support</h4>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;">
+          ${links.map((link, idx) => `
+            <a href="${window.APP_CONFIG?.LEGAL_BASE_URL ? window.APP_CONFIG.LEGAL_BASE_URL + '/' + link.slug : link.slug}"
+               style="display:flex;justify-content:space-between;align-items:center;padding:16px;text-decoration:none;color:#fff;font-size:.9rem;font-weight:500;${idx !== links.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.05);' : ''}"
+               onmouseover="this.style.background='rgba(232,65,24,0.1)'"
+               onmouseout="this.style.background='transparent'">
+              <span>${link.label}</span>
+              <span class="material-symbols-outlined" style="font-size:1.2rem;opacity:.3;">chevron_right</span>
+            </a>`).join('')}
+        </div>
+        <div style="text-align:center;margin-top:20px;opacity:.3;font-size:.65rem;font-weight:700;letter-spacing:.05em;">
+          ${window.APP_CONFIG?.STATION_NAME || 'Amaica Media'} \u2014 ${window.APP_CONFIG?.APP_VERSION || 'The Pulse v9'}
+        </div>`;
+      profileScreen.appendChild(legalGroup);
+    }
+
+    // ── Legal links — screen-settings (injected once, only when active)
+    const settingsScreen = document.getElementById('screen-settings');
+    if (settingsScreen && settingsScreen.classList.contains('active') && !settingsScreen.querySelector('.legal-section')) {
+      settingsScreen.insertAdjacentHTML('beforeend', `
+        <div class="legal-section" style="margin:20px 0 40px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.1);">
+          <p style="font-size:.72rem;font-weight:900;text-transform:uppercase;letter-spacing:.18em;color:var(--c-on-surface-variant);margin-bottom:16px;">Legal & Policies</p>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+            ${[['Terms of Service', 'terms.html'], ['Privacy Policy', 'privacy.html'], ['SLA', 'sla.html'], ['Marketplace Terms', 'marketplace-terms.html']]
+          .map(([label, slug]) => `<a href="${window.APP_CONFIG?.LEGAL_BASE_URL ? window.APP_CONFIG.LEGAL_BASE_URL + '/' + slug : slug}" style="font-size:.78rem;font-weight:700;color:var(--c-on-surface);text-decoration:none;padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);display:inline-block;">${label}</a>`).join('')}
+          </div>
+          <p style="font-size:.65rem;opacity:.5;">Version: ${window.APP_CONFIG?.APP_VERSION || 'The Pulse v9'}</p>
+        </div>`);
+    }
   }
 
   window.syncLocalProfileUI = syncLocalProfileUI;
@@ -921,39 +910,77 @@
       const prog = Math.min(streak / 7, 1);
       circle.style.strokeDashoffset = 283 - (prog * 283);
       circle.style.stroke = streak >= 3 ? 'var(--brand-green-leaf)' : '';
-      circle.style.filter = streak >= 3 ? 'drop-shadow(0 0 8px #e84118)' : `drop-shadow(0 0 ${prog * 10}px var(--brand-green-leaf))`;
+      circle.style.filter = streak >= 3
+        ? 'drop-shadow(0 0 8px #e84118)'
+        : `drop-shadow(0 0 ${prog * 10}px var(--brand-green-leaf))`;
     }
     checkSecretReward();
   };
 
-  // ── Leaderboard ──────────────────────────────────────────────
-  const localLB = [
-    { username: 'Sarah Sterling', points: 7800, streak: 14 },
-    { username: 'Luka Chen', points: 6200, streak: 8 },
-    { username: 'Nadia Bloom', points: 5900, streak: 32 },
-    { username: 'Keion Marks', points: 5400, streak: 5 },
-    { username: 'Priya Dev', points: 4800, streak: 21 },
-  ];
-
+  // ── Leaderboard ───────────────────────────────────────────────
   window.renderLeaderboard = function (data) {
-    const c = document.getElementById('lb-list'); if (!c) return;
+    const c        = document.getElementById('lb-list');      if (!c) return;
+    const podium   = document.getElementById('podium-wrap');
+    const empty    = document.getElementById('lb-empty-state');
+    const fmt      = pts => pts >= 1000 ? (pts / 1000).toFixed(1) + 'k' : String(pts || 0);
+    const tierColor = { gold: '#fbc531', silver: '#c0c0c0', bronze: '#cd7f32', superfan: 'var(--c-primary)' };
+
+    // ── No data at all ─────────────────────────────────────────
+    if (!data || !data.length) {
+      if (podium) podium.style.display = 'none';
+      if (empty)  empty.style.display  = '';
+      c.innerHTML = '';
+      return;
+    }
+
+    if (empty)  empty.style.display  = 'none';
+    if (podium) podium.style.display = '';
+
+    // ── Podium slots (2nd | 1st | 3rd) ───────────────────────
+    [
+      { sel: '.ps.second', user: data[1] },
+      { sel: '.ps.first',  user: data[0] },
+      { sel: '.ps.third',  user: data[2] },
+    ].forEach(({ sel, user }) => {
+      const el = document.querySelector(sel); if (!el) return;
+      if (!user) { el.style.visibility = 'hidden'; return; }
+      el.style.visibility = '';
+      const tc  = tierColor[user.tier] || 'var(--c-primary)';
+      const av  = el.querySelector('.pav');
+      const nm  = el.querySelector('.pname');
+      const pt  = el.querySelector('.ppts');
+      if (av) {
+        const badge = av.querySelector('.prank');
+        av.textContent = (user.username || '?').charAt(0).toUpperCase();
+        if (badge) av.appendChild(badge);
+        av.style.borderColor = tc;
+      }
+      if (nm) nm.textContent = user.username || 'Listener';
+      if (pt) { pt.textContent = fmt(user.points); pt.style.color = tc; }
+    });
+
+    // ── Rows 4+ ───────────────────────────────────────────────
     c.innerHTML = '';
-    (data || localLB).forEach((u, i) => {
+    data.slice(3).forEach((u, i) => {
       const sv = u.streak || 0;
       const fc = sv >= 7 ? '#76b82a' : sv >= 3 ? '#ff9500' : 'var(--c-on-surface-variant)';
       const fi = sv >= 7 ? '🌳' : '🔥';
-      const sf = sv > 0 ? `<span style="color:${fc};font-size:12px;font-weight:800;margin-left:4px;">${fi} ${sv}</span>` : '';
+      const sf = sv > 0 ? '<span style="color:' + fc + ';font-size:12px;font-weight:800;margin-left:4px;">' + fi + ' ' + sv + '</span>' : '';
       const row = document.createElement('div'); row.className = 'lb-row';
-      row.innerHTML = `<span class="lb-rank">${i + 4}</span><div class="lb-av">${(u.username || '?').charAt(0)}</div><div style="flex:1;"><p class="lb-name">${u.username}${sf}</p><p style="font-size:.58rem;color:var(--c-on-surface-variant);">Level: ${u.tier || 'Bronze'}</p></div><span class="lb-pts">${((u.points || 0) / 1000).toFixed(1)}k</span>`;
+      row.innerHTML = '<span class="lb-rank">' + (i + 4) + '</span>'
+        + '<div class="lb-av">' + (u.username || '?').charAt(0).toUpperCase() + '</div>'
+        + '<div style="flex:1;"><p class="lb-name">' + (u.username || 'Listener') + sf + '</p>'
+        + '<p style="font-size:.58rem;color:var(--c-on-surface-variant);">Level: ' + (u.tier || 'Bronze') + '</p></div>'
+        + '<span class="lb-pts">' + fmt(u.points) + '</span>';
       c.appendChild(row);
     });
   };
 
   if (typeof window.loadLeaderboard === 'undefined') {
-    window.loadLeaderboard = () => renderLeaderboard(localLB);
+    window.loadLeaderboard = function() {};
   }
 
-  // ── Auth helpers ──────────────────────────────────────────────
+    // ── Auth helpers ──────────────────────────────────────────────
   window.switchTab = function (t) {
     document.getElementById('tab-signin')?.classList.toggle('active', t === 'signin');
     document.getElementById('tab-signup')?.classList.toggle('active', t === 'signup');
@@ -997,7 +1024,7 @@
     syncLocalProfileUI(); showToast('Local data cleared', 'check_circle');
   };
 
-  // ── Chips & sections ─────────────────────────────────────────
+  // ── Chips & sections ──────────────────────────────────────────
   window.setChip = function (el, gid) {
     document.querySelectorAll('#' + gid + ' .chip').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
@@ -1013,32 +1040,37 @@
     if (panelId === 'comm-polls-panel') loadActivePoll();
   };
 
-  // ── Polls (admin-controlled via Supabase) ────────────────────
-  // Required Supabase table (run once in Supabase SQL editor):
-  // CREATE TABLE polls (
-  //   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  //   question text NOT NULL,
-  //   options jsonb NOT NULL,   -- array of strings, e.g. ["Option A","Option B"]
-  //   votes jsonb NOT NULL DEFAULT '[]', -- parallel array of counts
-  //   is_active boolean DEFAULT true,
-  //   created_at timestamptz DEFAULT now()
-  // );
-  // CREATE TABLE poll_votes (
-  //   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  //   poll_id uuid REFERENCES polls(id),
-  //   user_fingerprint text,
-  //   option_index int,
-  //   created_at timestamptz DEFAULT now(),
-  //   UNIQUE(poll_id, user_fingerprint)
-  // );
-
+  // ══════════════════════════════════════════════════════════════
+  //  🗳️ POLLS ENGINE
+  //
+  //  Required Supabase tables (run once in SQL editor):
+  //
+  //  CREATE TABLE polls (
+  //    id         uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  //    question   text NOT NULL,
+  //    options    jsonb NOT NULL,          -- array of strings
+  //    votes      jsonb NOT NULL DEFAULT '[]', -- parallel counts array
+  //    is_active  boolean DEFAULT true,
+  //    created_at timestamptz DEFAULT now()
+  //  );
+  //  CREATE TABLE poll_votes (
+  //    id               uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  //    poll_id          uuid REFERENCES polls(id),
+  //    user_fingerprint text,
+  //    option_index     int,
+  //    created_at       timestamptz DEFAULT now(),
+  //    UNIQUE(poll_id, user_fingerprint)
+  //  );
+  // ══════════════════════════════════════════════════════════════
   let _activePoll = null;
   let _pollSubscription = null;
 
-  // Fingerprint: anonymous device ID (no login required to vote)
   function getPollFingerprint() {
     let fp = localStorage.getItem('amaica_fp');
-    if (!fp) { fp = 'fp_' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('amaica_fp', fp); }
+    if (!fp) {
+      fp = 'fp_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('amaica_fp', fp);
+    }
     return fp;
   }
 
@@ -1046,7 +1078,6 @@
     const panel = document.getElementById('comm-polls-panel');
     if (!panel) return;
 
-    // No Supabase — show offline state
     if (!window._sb) {
       panel.innerHTML = `<div class="poll-empty-state"><span class="material-symbols-outlined" style="font-size:2rem;color:var(--c-on-surface-variant);">how_to_vote</span><p>Polls are launched live by the presenter during the show.</p><p style="font-size:.7rem;opacity:.6;margin-top:6px;">Check back when a show is on air.</p></div>`;
       return;
@@ -1054,7 +1085,13 @@
 
     panel.innerHTML = `<div class="poll-empty-state"><span class="material-symbols-outlined" style="font-size:1.4rem;opacity:.4;animation:spin 1s linear infinite;">progress_activity</span></div>`;
 
-    const { data } = await window._sb.from('polls').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(1).single();
+    const { data } = await window._sb
+      .from('polls')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
 
     if (!data) {
       panel.innerHTML = `<div class="poll-empty-state"><span class="material-symbols-outlined" style="font-size:2rem;color:var(--c-on-surface-variant);">how_to_vote</span><p>No poll is live right now.</p><p style="font-size:.7rem;opacity:.6;margin-top:6px;">The presenter will launch one during the show — check back!</p></div>`;
@@ -1063,15 +1100,13 @@
       await renderActivePoll(data);
     }
 
-    // Subscribe to realtime poll changes (new poll pushed by admin)
-    if (_pollSubscription) { _pollSubscription.unsubscribe(); }
+    if (_pollSubscription) _pollSubscription.unsubscribe();
     _pollSubscription = window._sb.channel('polls-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, async payload => {
         if (payload.new?.is_active) {
           _activePoll = payload.new;
           await renderActivePoll(payload.new);
         } else if (!payload.new?.is_active && _activePoll?.id === payload.new?.id) {
-          // Poll was closed by admin
           panel.innerHTML = `<div class="poll-empty-state"><span class="material-symbols-outlined" style="font-size:2rem;color:var(--c-on-surface-variant);">how_to_vote</span><p>The poll has ended. Stay tuned for the next one!</p></div>`;
           _activePoll = null;
         }
@@ -1086,9 +1121,13 @@
     const votes = poll.votes || options.map(() => 0);
     const total = votes.reduce((a, b) => a + b, 0);
 
-    // Check if this device already voted
-    const { data: existingVote } = await window._sb.from('poll_votes')
-      .select('option_index').eq('poll_id', poll.id).eq('user_fingerprint', fp).single().catch(() => ({ data: null }));
+    const { data: existingVote } = await window._sb
+      .from('poll_votes')
+      .select('option_index')
+      .eq('poll_id', poll.id)
+      .eq('user_fingerprint', fp)
+      .single()
+      .catch(() => ({ data: null }));
     const hasVoted = !!existingVote;
     const votedIdx = existingVote?.option_index ?? -1;
 
@@ -1103,16 +1142,10 @@
     let optsHtml = `<div class="poll-options" id="poll-opts-wrap">`;
     options.forEach((opt, i) => {
       const pct = total ? Math.round((votes[i] / total) * 100) : 0;
-      if (hasVoted) {
-        const isVoted = i === votedIdx;
-        optsHtml += `<div class="poll-result-row${isVoted ? ' voted' : ''}">
-          <div class="poll-result-fill" style="width:${pct}%"></div>
-          <span class="poll-result-label">${opt}${isVoted ? ' ✓' : ''}</span>
-          <span class="poll-result-pct">${pct}%</span>
-        </div>`;
-      } else {
-        optsHtml += `<button class="poll-opt-btn" onclick="castPollVote('${poll.id}',${i})">${opt}</button>`;
-      }
+      const isVoted = i === votedIdx;
+      optsHtml += hasVoted
+        ? `<div class="poll-result-row${isVoted ? ' voted' : ''}"><div class="poll-result-fill" style="width:${pct}%"></div><span class="poll-result-label">${opt}${isVoted ? ' ✓' : ''}</span><span class="poll-result-pct">${pct}%</span></div>`
+        : `<button class="poll-opt-btn" onclick="castPollVote('${poll.id}',${i})">${opt}</button>`;
     });
     optsHtml += `</div>`;
 
@@ -1124,17 +1157,18 @@
   window.castPollVote = async function (pollId, optionIndex) {
     if (!window._sb) { showToast('Connect to vote', 'error'); return; }
     const fp = getPollFingerprint();
-    const { error: voteErr } = await window._sb.from('poll_votes').insert({ poll_id: pollId, user_fingerprint: fp, option_index: optionIndex });
+    const { error: voteErr } = await window._sb
+      .from('poll_votes')
+      .insert({ poll_id: pollId, user_fingerprint: fp, option_index: optionIndex });
     if (voteErr) { showToast('You already voted!', 'info'); return; }
 
-    // Increment vote count in polls table
     const { data: poll } = await window._sb.from('polls').select('votes, options').eq('id', pollId).single();
     const votes = poll.votes || poll.options.map(() => 0);
     votes[optionIndex] = (votes[optionIndex] || 0) + 1;
     await window._sb.from('polls').update({ votes }).eq('id', pollId);
 
-    sbEarnPoints && sbEarnPoints(10, 'Poll vote');
-    showToast && showToast('+10 Pulse Points! Asante kwa kura yako 🙌', 'how_to_vote');
+    if (window.sbEarnPoints) sbEarnPoints(10, 'Poll vote');
+    if (window.showToast) showToast('+10 Pulse Points! Asante kwa kura yako 🙌', 'how_to_vote');
     if (_activePoll) { _activePoll.votes = votes; await renderActivePoll(_activePoll); }
   };
 
@@ -1154,7 +1188,7 @@
     }
   };
 
-  // ── Reminders ────────────────────────────────────────────────
+  // ── Reminders ─────────────────────────────────────────────────
   const _reminders = new Set();
   window.setReminder = function (idx, btn) {
     if (_reminders.has(idx)) {
@@ -1167,7 +1201,7 @@
     }
   };
 
-  // ── Sleep timer ──────────────────────────────────────────────
+  // ── Sleep timer ───────────────────────────────────────────────
   let _sleepTimer = null, _sleepTick = null;
   window.setSleepTimer = function (mins) {
     clearTimeout(_sleepTimer); clearInterval(_sleepTick);
@@ -1188,14 +1222,14 @@
     }, mins * 60000);
   };
 
-  // ── Quality ───────────────────────────────────────────────────
+  // ── Quality ────────────────────────────────────────────────────
   window.setQuality = function (q, btn) {
     document.querySelectorAll('#quality-chips .chip').forEach(c => c.classList.remove('active'));
     if (btn) btn.classList.add('active');
     showToast({ auto: 'Auto quality', low: 'Low bandwidth', high: 'High quality' }[q] || q, 'graphic_eq');
   };
 
-  // ── Theme ────────────────────────────────────────────────────
+  // ── Theme ──────────────────────────────────────────────────────
   window.setTheme = function (t) {
     document.documentElement.setAttribute('data-theme', t);
     updateSettingsThemeButtons();
@@ -1257,7 +1291,6 @@
     { name: 'Barizika', host: 'Joshua', days: [0], start: 960, end: 1140 },
   ];
 
-  // Load schedule from Supabase — replaces hardcoded if rows exist
   window.loadScheduleFromSupabase = async function () {
     if (!window._sb) return;
     try {
@@ -1280,11 +1313,16 @@
   function _fmtTime(m) { const h = Math.floor(m / 60) % 24, mn = m % 60, ap = h < 12 ? 'AM' : 'PM', hh = h % 12 || 12; return mn === 0 ? `${hh} ${ap}` : `${hh}:${String(mn).padStart(2, '0')} ${ap}`; }
   function _dayName(d) { return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d]; }
 
-  function getCurrentShow() { const now = _minsNow(), dow = new Date().getDay(); return _dayShows(dow).find(s => now >= s.start && now < s.end) || null; }
+  function getCurrentShow() {
+    const now = _minsNow(), dow = new Date().getDay();
+    return _dayShows(dow).find(s => now >= s.start && now < s.end) || null;
+  }
   function getNextMainShow() {
     const now = _minsNow(), dow = new Date().getDay();
-    const l = _dayShows(dow, true).find(s => s.start > now); if (l) return { ...l, dayLabel: 'Today' };
-    const tmr = (dow + 1) % 7, f = _dayShows(tmr, true)[0]; return f ? { ...f, dayLabel: _dayName(tmr) } : null;
+    const l = _dayShows(dow, true).find(s => s.start > now);
+    if (l) return { ...l, dayLabel: 'Today' };
+    const tmr = (dow + 1) % 7, f = _dayShows(tmr, true)[0];
+    return f ? { ...f, dayLabel: _dayName(tmr) } : null;
   }
   function getUpcoming(count = 3) {
     const now = _minsNow(), dow = new Date().getDay(), res = [];
@@ -1297,11 +1335,13 @@
     const cur = getCurrentShow(), nxt = getNextMainShow(), up = getUpcoming(3);
     const setText = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
     setText('hero-show-title', cur ? cur.name : 'Amaica Media');
-    const hh = document.getElementById('hero-show-host');
-    if (hh) hh.textContent = cur ? (cur.isNews ? '📰 ' + cur.host : 'with ' + (cur.host || 'Amaica Media 98.7 FM')) : '98.7 FM · Live';
     setText('player-show-title', cur ? cur.name : 'Amaica Media 98.7 FM');
     setText('player-show-host', cur ? (cur.host || '98.7 FM') : '98.7 FM');
     setText('mini-show-title', cur ? cur.name : 'Amaica Media');
+    const hh = document.getElementById('hero-show-host');
+    if (hh) hh.textContent = cur
+      ? (cur.isNews ? '📰 ' + cur.host : 'with ' + (cur.host || 'Amaica Media 98.7 FM'))
+      : '98.7 FM · Live';
     const nu = document.querySelector('.nu-label');
     if (nu && nxt) nu.innerHTML = `<strong>${nxt.name}</strong> · ${_fmtTime(nxt.start)}`;
     const rcList = document.getElementById('rc-shows-list');
@@ -1314,7 +1354,9 @@
         </div>`).join('');
     }
     const evTitle = document.getElementById('ev-live-title');
-    if (evTitle) evTitle.textContent = cur ? `${cur.name}${cur.host ? ' — ' + cur.host : ''}` : 'Amaica Media 98.7 FM';
+    if (evTitle) evTitle.textContent = cur
+      ? `${cur.name}${cur.host ? ' — ' + cur.host : ''}`
+      : 'Amaica Media 98.7 FM';
   }
 
   // ── Waveform background ───────────────────────────────────────
@@ -1324,13 +1366,16 @@
       for (let i = 0; i < 40; i++) {
         const b = document.createElement('div'); b.classList.add('wave-bar');
         Object.assign(b.style, {
-          width: '4px', background: 'var(--c-primary)', opacity: '1',
-          animationDelay: (Math.random() * -1.2) + 's', animationDuration: (0.7 + Math.random() * 0.9) + 's'
+          width: '4px',
+          background: 'var(--c-primary)',
+          opacity: '1',
+          animationDelay: (Math.random() * -1.2) + 's',
+          animationDuration: (0.7 + Math.random() * 0.9) + 's'
         });
         hwb.appendChild(b);
       }
     }
-    // Init UI
+
     syncLocalProfileUI();
     updateSettingsThemeButtons();
     initChat();
@@ -1343,7 +1388,7 @@
     setInterval(syncScheduleUI, 60000);
     if (typeof renderAuthState !== 'undefined') renderAuthState();
     initReveal();
-    // Wait for Supabase then start the stats engine
+
     function startEngine() {
       if (window._sb) {
         console.log('Database Connected. Starting Stats...');
@@ -1351,7 +1396,7 @@
         setInterval(syncStatistics, 15000);
         if (typeof loadAnalytics === 'function') loadAnalytics();
         if (window.loadScheduleFromSupabase) loadScheduleFromSupabase();
-        if (window.loadSponsors) loadSponsors();
+        if (window.loadSponsors) { loadSponsors(); setInterval(loadSponsors, 300000); }
       } else {
         setTimeout(startEngine, 500);
       }
@@ -1448,7 +1493,6 @@ window.openContactUs = function () {
           <p style="font-size:.72rem;color:var(--c-on-surface-variant);">${phone}</p></div>
         </a>
       </div>
-      <!-- In-app message form -->
       <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
                 color:var(--c-on-surface-variant);margin-bottom:8px;">Send a Message</p>
       <textarea id="contact-msg" placeholder="Type your message here…" rows="3"
@@ -1478,15 +1522,14 @@ window.submitContactMessage = async function () {
     });
   }
   document.getElementById('contact-modal')?.remove();
-  if (window.showToast) showToast('Message sent! We\'ll get back to you soon.', 'check_circle');
+  if (window.showToast) showToast("Message sent! We'll get back to you soon.", 'check_circle');
 };
 
 // ═══════════════════════════════════════════════════════════════
 //  🔗 FOOTER — LEGAL & SOCIAL LINKS
 // ═══════════════════════════════════════════════════════════════
 window.renderAppFooter = function () {
-  const existing = document.getElementById('app-footer');
-  if (existing) return;
+  if (document.getElementById('app-footer')) return;
   const footer = document.createElement('div');
   footer.id = 'app-footer';
   const socials = window.APP_CONFIG?.SOCIALS || {};
@@ -1501,8 +1544,6 @@ window.renderAppFooter = function () {
   footer.innerHTML = `
     <div style="padding:32px 20px 60px;max-width:600px;margin:0 auto;">
       <hr style="border:none;border-top:1px solid var(--c-outline);margin-bottom:24px;">
-
-      <!-- Social Links -->
       ${socialLinks.length > 0 ? `
       <p style="font-size:.58rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;
                 color:var(--c-on-surface-variant);margin-bottom:12px;">Find Us</p>
@@ -1515,19 +1556,17 @@ window.renderAppFooter = function () {
             <span style="color:${s.color};font-weight:900;">${s.icon}</span> ${s.label}
           </a>`).join('')}
       </div>` : ''}
-
-      <!-- Legal Links -->
       <p style="font-size:.72rem;font-weight:900;text-transform:uppercase;letter-spacing:.18em;
                 color:var(--c-on-surface);margin-bottom:16px;">Legal</p>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:24px;">
         ${[
-      ['Terms of Service', 'terms'],
-      ['Privacy Policy', 'privacy'],
-      ['Service Level Agreement', 'sla'],
+      ['Terms of Service', 'terms.html'],
+      ['Privacy Policy', 'privacy.html'],
+      ['Service Level Agreement', 'sla.html'],
       ['Acceptable Use Policy', 'aup'],
-      ['Marketplace Terms', 'marketplace-terms'],
+      ['Marketplace Terms', 'marketplace-terms.html'],
     ].map(([label, slug]) => `
-          <a href="${window.APP_CONFIG?.LEGAL_BASE_URL || '#'}/${slug}"
+          <a href="${window.APP_CONFIG?.LEGAL_BASE_URL ? window.APP_CONFIG.LEGAL_BASE_URL + '/' + slug : slug}"
             style="font-size:.78rem;font-weight:700;color:var(--c-on-surface);text-decoration:none;
                    padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.06);
                    border:1px solid rgba(255,255,255,0.15);display:inline-block;"
@@ -1536,8 +1575,6 @@ window.renderAppFooter = function () {
             ${label}
           </a>`).join('')}
       </div>
-
-      <!-- Bottom -->
       <p style="font-size:.65rem;color:var(--c-on-surface-variant);text-align:center;">
         © ${new Date().getFullYear()} Amaica Media · 98.7 FM Kakamega, Kenya
       </p>

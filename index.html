@@ -21,6 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/country-coords.js"></script>
   <script src="js/admin.js" defer></script>
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
@@ -35,6 +36,308 @@
     ];
   </script>
   <script src="js/app.js" defer></script>
+  <style>
+    /* ── Legal pages (scoped) ────────────────────────────────── */
+    .legal-screen {
+      overflow-y: auto;
+      padding-bottom: 80px;
+    }
+
+    .legal-screen .ls-shell {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 60px 24px 40px;
+    }
+
+    .legal-screen .doc-header {
+      margin-bottom: 56px;
+    }
+
+    .legal-screen .doc-tag {
+      display: inline-block;
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: .62rem;
+      font-weight: 800;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: #e84118;
+      border: 1px solid rgba(232, 65, 24, .35);
+      border-radius: 20px;
+      padding: 4px 12px;
+      margin-bottom: 18px;
+    }
+
+    .legal-screen .doc-title {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: clamp(2rem, 6vw, 3rem);
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 14px;
+      color: #f0f0f0;
+    }
+
+    .legal-screen .doc-meta {
+      font-size: .8rem;
+      color: rgba(255, 255, 255, .38);
+    }
+
+    .legal-screen .doc-meta span {
+      margin-right: 18px;
+    }
+
+    .legal-screen .ls-divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.07);
+      margin: 40px 0;
+    }
+
+    .legal-screen .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .8rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, .38);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 20px;
+      padding: 7px 14px;
+      margin-bottom: 40px;
+      cursor: pointer;
+      background: transparent;
+      transition: color .2s, border-color .2s;
+    }
+
+    .legal-screen .back-btn:hover {
+      color: #f0f0f0;
+      border-color: rgba(255, 255, 255, .2);
+    }
+
+    .legal-screen .back-btn svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .legal-screen .ls-sec {
+      margin-bottom: 40px;
+    }
+
+    .legal-screen .ls-sec-num {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: .6rem;
+      font-weight: 800;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: #e84118;
+      margin-bottom: 6px;
+    }
+
+    .legal-screen .ls-sec h2 {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 800;
+      margin-bottom: 12px;
+      color: #f0f0f0;
+    }
+
+    .legal-screen .ls-sec p {
+      color: rgba(255, 255, 255, .75);
+      margin-bottom: 10px;
+    }
+
+    .legal-screen .ls-sec p:last-child {
+      margin-bottom: 0;
+    }
+
+    .legal-screen .ls-sec ul {
+      color: rgba(255, 255, 255, .75);
+      padding-left: 18px;
+      margin-bottom: 10px;
+    }
+
+    .legal-screen .ls-sec ul li {
+      margin-bottom: 6px;
+    }
+
+    .legal-screen .ls-sec a {
+      color: #e84118;
+      text-decoration: none;
+    }
+
+    .legal-screen .ls-sec a:hover {
+      text-decoration: underline;
+    }
+
+    .legal-screen .ls-callout {
+      background: rgba(232, 65, 24, .08);
+      border: 1px solid rgba(232, 65, 24, .2);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+
+    .legal-screen .ls-callout p {
+      color: rgba(255, 255, 255, .8);
+      margin: 0;
+      font-size: .88rem;
+    }
+
+    .legal-screen .ls-callout.gold {
+      background: rgba(251, 197, 49, .07);
+      border-color: rgba(251, 197, 49, .25);
+    }
+
+    .legal-screen .ls-table-wrap {
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    .legal-screen table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .85rem;
+    }
+
+    .legal-screen th {
+      text-align: left;
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: .62rem;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, .38);
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .legal-screen td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      color: rgba(255, 255, 255, .72);
+      vertical-align: top;
+    }
+
+    .legal-screen tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* reward cards (marketplace) */
+    .legal-screen .reward-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    @media(max-width:520px) {
+      .legal-screen .reward-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .legal-screen .reward-card {
+      background: #111;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .legal-screen .reward-card .icon {
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+    }
+
+    .legal-screen .reward-card .name {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: .78rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+      color: #f0f0f0;
+    }
+
+    .legal-screen .reward-card .pts {
+      font-size: .72rem;
+      color: #fbc531;
+    }
+
+    .legal-screen .reward-card .refs {
+      font-size: .65rem;
+      color: rgba(255, 255, 255, .38);
+      margin-top: 2px;
+    }
+
+    /* SLA cards */
+    .legal-screen .sla-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    @media(max-width:480px) {
+      .legal-screen .sla-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .legal-screen .sla-card {
+      background: #111;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 12px;
+      padding: 18px;
+    }
+
+    .legal-screen .sla-card .label {
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: rgba(255, 255, 255, .38);
+      margin-bottom: 6px;
+    }
+
+    .legal-screen .sla-card .value {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #76b82a;
+    }
+
+    .legal-screen .sla-card .sub {
+      font-size: .75rem;
+      color: rgba(255, 255, 255, .38);
+      margin-top: 2px;
+    }
+
+    /* footer */
+    .legal-screen .ls-doc-footer {
+      margin-top: 60px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .legal-screen .ls-doc-footer p {
+      font-size: .72rem;
+      color: rgba(255, 255, 255, .38);
+    }
+
+    .legal-screen .ls-doc-footer .brand {
+      font-family: 'Source Sans 3', sans-serif;
+      font-weight: 800;
+      font-size: .8rem;
+      color: #f0f0f0;
+    }
+  </style>
 </head>
 
 <body>
@@ -66,10 +369,19 @@
     <div id="screen-home" class="screen active">
       <!-- MINIMAL PLAY BUTTON -->
       <div class="hero-minimal">
+        <!-- SHOW NAME -->
+        <div style="text-align:center;margin-bottom:10px;min-height:38px;">
+          <p id="hero-show-title"
+            style="font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--c-primary);margin-bottom:3px;">
+            Amaica Media</p>
+          <p id="hero-show-host" style="font-size:.65rem;color:var(--c-on-surface-variant);font-weight:500;">98.7 FM ·
+            Live</p>
+        </div>
         <div class="play-circle-wrap" onclick="toggleRadio()">
           <div class="play-ring"></div>
           <button class="play-main-clean" id="main-orb-btn">
-            <span class="material-symbols-outlined" id="orb-icon" style="font-size:40px;font-variation-settings:'FILL' 1;">play_arrow</span>
+            <span class="material-symbols-outlined" id="orb-icon"
+              style="font-size:40px;font-variation-settings:'FILL' 1;">play_arrow</span>
           </button>
         </div>
       </div>
@@ -145,7 +457,7 @@
               <div class="cpm-av">M</div>
               <div class="cpm-body">
                 <p class="cpm-user">Marcus R.</p>
-                <p class="cpm-text">DJ Echo is fire tonight 🔥</p>
+                <p class="cpm-text">DJ Es_Republik is fire tonight 🔥</p>
               </div>
             </div>
             <div class="cpm">
@@ -192,8 +504,8 @@
                 style="font-size:12px;">headphones</span><span id="player-listener-count"
                 class="listener-count-el">—</span> listening</div>
           </div>
-          <h2 class="player-title" id="player-show-title">Amaica Media 98.7 FM</h2>
-          <p class="player-host" id="player-show-host">98.7 FM</p>
+          <h2 class="player-title" id="player-show-title">Amaica Radio</h2>
+          <p class="player-host" id="player-show-host">Amaica Radio</p>
         </div>
         <div style="width:100%;">
           <div class="tl-bar">
@@ -246,9 +558,11 @@
     <!-- COMMUNITY -->
     <div id="screen-community" class="screen">
       <h1 class="screen-title">LIVE CHAT</h1>
-      <p class="screen-sub">What's on your mind? Every message earns <strong style="color:var(--c-primary);">+5 pts</strong>.</p>
+      <p class="screen-sub">What's on your mind? Every message earns <strong style="color:var(--c-primary);">+5
+          pts</strong>.</p>
       <div class="chip-row" id="chat-filters">
-        <button class="chip active" onclick="switchCommunityTab(this,'chat-filters','comm-chat-panel')">Live Chat</button>
+        <button class="chip active" onclick="switchCommunityTab(this,'chat-filters','comm-chat-panel')">Live
+          Chat</button>
         <button class="chip" onclick="openCallIn()">Call-In</button>
         <button class="chip" onclick="switchCommunityTab(this,'chat-filters','comm-polls-panel')">Polls</button>
       </div>
@@ -337,25 +651,31 @@
         <button class="btn-secondary" onclick="loadLeaderboard()"
           style="margin-bottom:14px;font-size:.7rem;padding:7px 14px;"><span class="material-symbols-outlined"
             style="font-size:13px;">refresh</span>Refresh</button>
-        <div class="podium">
+        <div class="podium" id="podium-wrap" style="display:none;">
           <div class="ps second">
-            <div class="pav">E<span class="prank">2</span></div>
-            <p class="pname">Elena V.</p>
-            <p class="ppts">12.4k</p>
+            <div class="pav">–<span class="prank">2</span></div>
+            <p class="pname">–</p>
+            <p class="ppts">–</p>
             <div class="pbar"></div>
           </div>
           <div class="ps first">
-            <div class="pav">M<span class="prank">1</span></div>
-            <p class="pname">Marcus R.</p>
-            <p class="ppts">18.9k</p>
+            <div class="pav">–<span class="prank">1</span></div>
+            <p class="pname">–</p>
+            <p class="ppts">–</p>
             <div class="pbar"></div>
           </div>
           <div class="ps third">
-            <div class="pav">J<span class="prank">3</span></div>
-            <p class="pname">J. Aris</p>
-            <p class="ppts">9.1k</p>
+            <div class="pav">–<span class="prank">3</span></div>
+            <p class="pname">–</p>
+            <p class="ppts">–</p>
             <div class="pbar"></div>
           </div>
+        </div>
+        <div id="lb-empty-state" style="text-align:center;padding:48px 0 24px;opacity:.4;">
+          <span class="material-symbols-outlined"
+            style="font-size:2.5rem;display:block;margin-bottom:10px;">leaderboard</span>
+          <p style="font-size:.85rem;font-weight:700;">No rankings yet</p>
+          <p style="font-size:.72rem;margin-top:4px;">Start listening to earn points and claim your spot.</p>
         </div>
         <div id="lb-list"></div>
       </div>
@@ -722,8 +1042,8 @@
           <div style="display:flex;justify-content:space-between;"><span style="color:var(--c-on-surface-variant);">App
               Version</span><span class="version-tap" style="font-weight:600;">The Pulse v8</span></div>
           <div style="display:flex;justify-content:space-between;"><span
-              style="color:var(--c-on-surface-variant);">Station</span><span style="font-weight:600;">Amaica Radio 98.7
-              FM</span></div>
+              style="color:var(--c-on-surface-variant);">Station</span><span style="font-weight:600;">Amaica
+              Radio</span></div>
           <div style="display:flex;justify-content:space-between;"><span
               style="color:var(--c-on-surface-variant);">Location</span><span style="font-weight:600;">Kakamega,
               Kenya</span></div>
@@ -740,6 +1060,663 @@
             local data</button>
         </div>
       </div>
+      <div class="setting-group">
+        <p class="setting-group-label"><span class="material-symbols-outlined">gavel</span>Legal</p>
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <button onclick="showLegalPage('terms')"
+            style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--c-surface-high);border-radius:10px;color:var(--c-on-surface);text-decoration:none;font-size:.84rem;font-weight:600;border:none;cursor:pointer;width:100%;">
+            <span>Terms of Service</span><span class="material-symbols-outlined"
+              style="font-size:16px;color:var(--c-on-surface-variant);">chevron_right</span>
+          </button>
+          <button onclick="showLegalPage('privacy')"
+            style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--c-surface-high);border-radius:10px;color:var(--c-on-surface);text-decoration:none;font-size:.84rem;font-weight:600;border:none;cursor:pointer;width:100%;">
+            <span>Privacy Policy</span><span class="material-symbols-outlined"
+              style="font-size:16px;color:var(--c-on-surface-variant);">chevron_right</span>
+          </button>
+          <button onclick="showLegalPage('sla')"
+            style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--c-surface-high);border-radius:10px;color:var(--c-on-surface);text-decoration:none;font-size:.84rem;font-weight:600;border:none;cursor:pointer;width:100%;">
+            <span>Service Level Agreement</span><span class="material-symbols-outlined"
+              style="font-size:16px;color:var(--c-on-surface-variant);">chevron_right</span>
+          </button>
+          <button onclick="showLegalPage('marketplace-terms')"
+            style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--c-surface-high);border-radius:10px;color:var(--c-on-surface);text-decoration:none;font-size:.84rem;font-weight:600;border:none;cursor:pointer;width:100%;">
+            <span>Marketplace Terms</span><span class="material-symbols-outlined"
+              style="font-size:16px;color:var(--c-on-surface-variant);">chevron_right</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ LEGAL: TERMS OF SERVICE ═══ -->
+    <div id="screen-terms" class="screen legal-screen">
+      <div class="ls-shell">
+        <button class="back-btn" onclick="hideLegalPage()">
+          <svg viewBox="0 0 16 16">
+            <polyline points="10 3 5 8 10 13" />
+          </svg>Back
+        </button>
+        <header class="doc-header">
+          <div class="doc-tag">Legal</div>
+          <h1 class="doc-title">Terms of<br>Service</h1>
+          <div class="doc-meta"><span>Effective: 1 January 2025</span><span>Version 1.0</span></div>
+        </header>
+        <div class="ls-callout">
+          <p>By using the Amaica Pulse app or listening to Amaica Media 98.7 FM, you agree to these terms. Please read
+            them — they are short.</p>
+        </div>
+        <div class="ls-divider"></div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">01</div>
+          <h2>Who We Are</h2>
+          <p>Amaica Media operates <strong>98.7 FM</strong>, a licensed radio station based in Kakamega, Kenya, and the
+            <strong>Amaica Pulse</strong> web app ("the App"). We are regulated by the <strong>Communications Authority
+              of Kenya (CA)</strong> under the Kenya Information and Communications Act, Cap 411A.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">02</div>
+          <h2>Using the App</h2>
+          <p>The App is free to use. By accessing it you confirm that you:</p>
+          <ul>
+            <li>Are at least 13 years old.</li>
+            <li>Will not misuse chat, polls, or any community feature to harass, defame, or spread misinformation.</li>
+            <li>Will not attempt to circumvent point-earning limits, fabricate referrals, or exploit the rewards system.
+            </li>
+            <li>Understand that stream availability depends on your internet connection and our broadcast uptime.</li>
+          </ul>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">03</div>
+          <h2>Pulse Points &amp; Rewards</h2>
+          <p>Pulse Points are a loyalty mechanism with no monetary value and cannot be transferred, sold, or exchanged
+            for cash. Points are earned through listening, chatting, voting in polls, referring friends, and completing
+            missions.</p>
+          <p>We reserve the right to adjust point values, tier thresholds, or rewards at any time with reasonable
+            notice. Points expire after <strong>12 months of account inactivity</strong>.</p>
+          <p>Physical gear rewards (T-shirts, jackets, hoodies) require both the stated point balance and the minimum
+            referral count. Vouchers are sent by email and are valid for 90 days.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">04</div>
+          <h2>Broadcast Content</h2>
+          <p>All on-air content is produced under our CA broadcast licence. Music is played under licensing arrangements
+            with <strong>MCSK</strong> (Music Copyright Society of Kenya) and <strong>PRISK</strong> (Performers Rights
+            Society of Kenya). You may not record, redistribute, or rebroadcast our stream without written permission.
+          </p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">05</div>
+          <h2>User-Generated Content</h2>
+          <p>Chat messages and poll votes you submit are visible to other listeners in real time. By submitting content
+            you grant Amaica Media a non-exclusive licence to display it within the App. We reserve the right to remove
+            any content that violates these terms or Kenyan law.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">06</div>
+          <h2>Limitation of Liability</h2>
+          <p>The App is provided "as is". We are not liable for interruptions, data loss, or indirect damages arising
+            from your use of the App. Our total liability for any claim is limited to the value of rewards redeemed by
+            you in the 30 days preceding the claim.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">07</div>
+          <h2>Governing Law</h2>
+          <p>These terms are governed by the laws of Kenya. Disputes shall be resolved in the courts of Kakamega County
+            or through the CA's dispute-resolution mechanism where applicable.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">08</div>
+          <h2>Contact</h2>
+          <p>Questions? Email <a href="mailto:info@amaicamedia.com">info@amaicamedia.com</a> or WhatsApp <a
+              href="https://wa.me/254715505284">+254 715 505 284</a>.</p>
+        </div>
+        <div class="ls-doc-footer"><span class="brand">Amaica Media · 98.7 FM</span>
+          <p>© 2025 Amaica Media. All rights reserved.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ LEGAL: PRIVACY POLICY ═══ -->
+    <div id="screen-privacy" class="screen legal-screen">
+      <div class="ls-shell">
+        <button class="back-btn" onclick="hideLegalPage()">
+          <svg viewBox="0 0 16 16">
+            <polyline points="10 3 5 8 10 13" />
+          </svg>Back
+        </button>
+        <header class="doc-header">
+          <div class="doc-tag">Legal</div>
+          <h1 class="doc-title">Privacy<br>Policy</h1>
+          <div class="doc-meta"><span>Effective: 1 January 2025</span><span>Version 1.0</span></div>
+        </header>
+        <div class="ls-callout">
+          <p>We collect only what we need to run the App and the loyalty programme. We do not sell your data. This
+            policy is governed by the <strong>Kenya Data Protection Act, 2019</strong> and the regulations made under
+            it.</p>
+        </div>
+        <div class="ls-divider"></div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">01</div>
+          <h2>Data Controller</h2>
+          <p><strong>Amaica Media</strong>, Kakamega, Kenya.<br>Contact: <a
+              href="mailto:info@amaicamedia.com">info@amaicamedia.com</a> · <a href="https://wa.me/254715505284">+254
+              715 505 284</a></p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">02</div>
+          <h2>What We Collect</h2>
+          <div class="ls-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Why</th>
+                  <th>Legal Basis (DPA 2019)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Email address &amp; password (registered users)</td>
+                  <td>Account creation &amp; authentication</td>
+                  <td>Contract performance</td>
+                </tr>
+                <tr>
+                  <td>Display name / username</td>
+                  <td>Chat, leaderboard, rewards</td>
+                  <td>Contract performance</td>
+                </tr>
+                <tr>
+                  <td>Pulse Points balance, streak, listen minutes</td>
+                  <td>Loyalty programme operation</td>
+                  <td>Contract performance</td>
+                </tr>
+                <tr>
+                  <td>Chat messages &amp; poll votes</td>
+                  <td>Community features; moderation</td>
+                  <td>Legitimate interest</td>
+                </tr>
+                <tr>
+                  <td>Mobile phone number (airtime redemptions only)</td>
+                  <td>Deliver airtime reward via Africa's Talking</td>
+                  <td>Consent (provided at redemption)</td>
+                </tr>
+                <tr>
+                  <td>Device fingerprint (anonymous, localStorage)</td>
+                  <td>Prevent duplicate poll votes</td>
+                  <td>Legitimate interest</td>
+                </tr>
+                <tr>
+                  <td>Approximate location (IP-derived, not stored)</td>
+                  <td>Stream quality routing</td>
+                  <td>Legitimate interest</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Guest users (no account) store data only in their own browser's <code>localStorage</code>. We do not
+            receive it.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">03</div>
+          <h2>How We Use It</h2>
+          <ul>
+            <li>To operate the live stream, chat, polls, and leaderboard.</li>
+            <li>To calculate and award Pulse Points and process reward redemptions.</li>
+            <li>To send transactional messages (redemption confirmations, account emails).</li>
+            <li>To detect and prevent abuse of the rewards system.</li>
+            <li>To improve app performance using aggregate, anonymised analytics.</li>
+          </ul>
+          <p>We do <strong>not</strong> use your data for targeted advertising or share it with third-party advertisers.
+          </p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">04</div>
+          <h2>Third-Party Processors</h2>
+          <div class="ls-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Processor</th>
+                  <th>Purpose</th>
+                  <th>Location</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Supabase</td>
+                  <td>Database, authentication, realtime</td>
+                  <td>EU (AWS)</td>
+                </tr>
+                <tr>
+                  <td>Africa's Talking</td>
+                  <td>Airtime disbursement</td>
+                  <td>Kenya</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Each processor is bound by a data processing agreement consistent with the DPA 2019.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">05</div>
+          <h2>Retention</h2>
+          <ul>
+            <li><strong>Account data</strong> — held while your account is active and for 12 months after deletion.</li>
+            <li><strong>Chat messages</strong> — retained for 90 days, then purged.</li>
+            <li><strong>Redemption records</strong> — 3 years for financial compliance.</li>
+            <li><strong>Guest localStorage data</strong> — stored only on your device; cleared when you clear browser
+              data.</li>
+          </ul>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">06</div>
+          <h2>Your Rights</h2>
+          <p>Under the Kenya Data Protection Act 2019, you have the right to:</p>
+          <ul>
+            <li><strong>Access</strong> — request a copy of data we hold about you.</li>
+            <li><strong>Rectification</strong> — correct inaccurate personal data.</li>
+            <li><strong>Erasure</strong> — request deletion (subject to legal retention obligations).</li>
+            <li><strong>Objection</strong> — object to processing based on legitimate interest.</li>
+            <li><strong>Portability</strong> — receive your data in a machine-readable format.</li>
+            <li><strong>Withdraw consent</strong> — at any time for processing based on consent (e.g. airtime number).
+            </li>
+          </ul>
+          <p>Submit requests to <a href="mailto:info@amaicamedia.com">info@amaicamedia.com</a>. We respond within 21
+            days. You may also lodge a complaint with the <strong>Office of the Data Protection Commissioner
+              (ODPC)</strong> at <a href="https://www.odpc.go.ke" target="_blank">odpc.go.ke</a>.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">07</div>
+          <h2>Security</h2>
+          <p>Passwords are hashed and never stored in plain text. All data is transmitted over HTTPS. Access to the
+            database is role-restricted. We notify affected users within 72 hours of a confirmed breach, as required by
+            DPA 2019 s.43.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">08</div>
+          <h2>Children</h2>
+          <p>We do not knowingly collect data from users under 13. If you believe a child has registered, contact us
+            immediately for deletion.</p>
+        </div>
+        <div class="ls-doc-footer"><span class="brand">Amaica Media · 98.7 FM</span>
+          <p>© 2025 Amaica Media. All rights reserved.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ LEGAL: SERVICE LEVEL AGREEMENT ═══ -->
+    <div id="screen-sla" class="screen legal-screen">
+      <div class="ls-shell">
+        <button class="back-btn" onclick="hideLegalPage()">
+          <svg viewBox="0 0 16 16">
+            <polyline points="10 3 5 8 10 13" />
+          </svg>Back
+        </button>
+        <header class="doc-header">
+          <div class="doc-tag">Legal</div>
+          <h1 class="doc-title">Service Level<br>Agreement</h1>
+          <div class="doc-meta"><span>Effective: 1 January 2025</span><span>Version 1.0</span></div>
+        </header>
+        <div class="ls-callout">
+          <p>This SLA describes the availability commitments for the Amaica Pulse App and the 98.7 FM live stream. It
+            applies to all users of the free service.</p>
+        </div>
+        <div class="ls-divider"></div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">01</div>
+          <h2>Service Targets</h2>
+          <div class="sla-grid">
+            <div class="sla-card">
+              <div class="label">App Uptime</div>
+              <div class="value">99%</div>
+              <div class="sub">Monthly target</div>
+            </div>
+            <div class="sla-card">
+              <div class="label">Stream Uptime</div>
+              <div class="value">97%</div>
+              <div class="sub">Monthly target</div>
+            </div>
+            <div class="sla-card">
+              <div class="label">Support Response</div>
+              <div class="value">24 h</div>
+              <div class="sub">Business days</div>
+            </div>
+            <div class="sla-card">
+              <div class="label">Incident Notice</div>
+              <div class="value">2 h</div>
+              <div class="sub">For outages &gt; 30 min</div>
+            </div>
+          </div>
+          <p>Uptime is measured as a percentage of minutes in the calendar month excluding scheduled maintenance
+            windows.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">02</div>
+          <h2>Scheduled Maintenance</h2>
+          <p>Planned maintenance is conducted between <strong>01:00 – 04:00 EAT</strong> on Sundays. We will post a
+            notice in the App at least 24 hours in advance. Maintenance windows do not count against uptime
+            calculations.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">03</div>
+          <h2>Exclusions</h2>
+          <p>The following are not counted as downtime:</p>
+          <ul>
+            <li>Scheduled maintenance windows.</li>
+            <li>Outages caused by your internet service provider or mobile network.</li>
+            <li>Force majeure events (power grid failure, floods, government-ordered shutdowns).</li>
+            <li>Third-party streaming CDN outages beyond our direct control.</li>
+            <li>CA-ordered broadcast suspension.</li>
+          </ul>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">04</div>
+          <h2>Incident Classification</h2>
+          <div class="ls-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Severity</th>
+                  <th>Definition</th>
+                  <th>Target Resolution</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>P1 — Critical</strong></td>
+                  <td>Stream completely down; App inaccessible</td>
+                  <td>4 hours</td>
+                </tr>
+                <tr>
+                  <td><strong>P2 — High</strong></td>
+                  <td>Points not recording; redemptions failing</td>
+                  <td>12 hours</td>
+                </tr>
+                <tr>
+                  <td><strong>P3 — Medium</strong></td>
+                  <td>Chat or polls degraded; UI errors</td>
+                  <td>48 hours</td>
+                </tr>
+                <tr>
+                  <td><strong>P4 — Low</strong></td>
+                  <td>Cosmetic issues; minor inaccuracies</td>
+                  <td>Next release</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">05</div>
+          <h2>Service Credits</h2>
+          <p>If monthly app uptime falls below 99%, affected registered users will receive a Pulse Points credit
+            automatically:</p>
+          <div class="ls-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Uptime achieved</th>
+                  <th>Credit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>95% – 98.99%</td>
+                  <td>100 Pulse Points</td>
+                </tr>
+                <tr>
+                  <td>90% – 94.99%</td>
+                  <td>250 Pulse Points</td>
+                </tr>
+                <tr>
+                  <td>Below 90%</td>
+                  <td>500 Pulse Points</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Credits are issued within 7 days of month-end. They have no cash value and are subject to the Pulse Points
+            terms.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">06</div>
+          <h2>Reporting an Incident</h2>
+          <p>Report outages via WhatsApp <a href="https://wa.me/254715505284">+254 715 505 284</a> or email <a
+              href="mailto:info@amaicamedia.com">info@amaicamedia.com</a>. Include the time, your device type, and a
+            brief description. We will acknowledge within 2 hours during business hours (Mon–Sat, 07:00–22:00 EAT).</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">07</div>
+          <h2>Changes to this SLA</h2>
+          <p>We may update targets upward (i.e. more favourable to users) at any time. Reductions in targets require 30
+            days' notice posted in the App.</p>
+        </div>
+        <div class="ls-doc-footer"><span class="brand">Amaica Media · 98.7 FM</span>
+          <p>© 2025 Amaica Media. All rights reserved.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ LEGAL: MARKETPLACE TERMS ═══ -->
+    <div id="screen-marketplace-terms" class="screen legal-screen">
+      <div class="ls-shell">
+        <button class="back-btn" onclick="hideLegalPage()">
+          <svg viewBox="0 0 16 16">
+            <polyline points="10 3 5 8 10 13" />
+          </svg>Back
+        </button>
+        <header class="doc-header">
+          <div class="doc-tag">Legal</div>
+          <h1 class="doc-title">Marketplace<br>Terms</h1>
+          <div class="doc-meta"><span>Effective: 1 January 2025</span><span>Version 1.0</span></div>
+        </header>
+        <div class="ls-callout">
+          <p>These terms govern how you earn Pulse Points, redeem rewards, and claim gear. They form part of our main
+            Terms of Service.</p>
+        </div>
+        <div class="ls-divider"></div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">01</div>
+          <h2>Nature of Pulse Points</h2>
+          <p>Pulse Points are a <strong>non-monetary loyalty credit</strong>. They are:</p>
+          <ul>
+            <li>Not currency, not a financial instrument, and not redeemable for cash.</li>
+            <li>Not transferable between accounts.</li>
+            <li>Not inheritable or assignable.</li>
+            <li>Subject to forfeiture if your account is suspended for abuse.</li>
+          </ul>
+          <p>This design is consistent with the <strong>National Payment System Act (Kenya)</strong>, which exempts
+            loyalty points from e-money regulation provided they have no cash-out mechanism.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">02</div>
+          <h2>How Points Are Earned</h2>
+          <div class="ls-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Points</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Listening (per minute)</td>
+                  <td>10 pts</td>
+                  <td>Awarded each minute the stream is active</td>
+                </tr>
+                <tr>
+                  <td>Sending a chat message</td>
+                  <td>5 pts</td>
+                  <td>Live community chat only</td>
+                </tr>
+                <tr>
+                  <td>Daily streak bonus</td>
+                  <td>10 × streak (max 100)</td>
+                  <td>Awarded on first listen of each day</td>
+                </tr>
+                <tr>
+                  <td>Stoking the fire</td>
+                  <td>1 pt</td>
+                  <td>Per vibe tap</td>
+                </tr>
+                <tr>
+                  <td>Voting in a poll</td>
+                  <td>10 pts</td>
+                  <td>One vote per poll</td>
+                </tr>
+                <tr>
+                  <td>Setting a show reminder</td>
+                  <td>5 pts</td>
+                  <td>Per reminder set</td>
+                </tr>
+                <tr>
+                  <td>Referring a friend</td>
+                  <td>Bonus (variable)</td>
+                  <td>Friend must create an account</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>A <strong>scarcity multiplier</strong> is applied: as live listener count grows, per-action point values
+            decrease proportionally. This keeps the points economy balanced.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">03</div>
+          <h2>Tiers</h2>
+          <div class="ls-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tier</th>
+                  <th>Points Required</th>
+                  <th>Benefits</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>🥉 Bronze</td>
+                  <td>0</td>
+                  <td>Access to Marketplace</td>
+                </tr>
+                <tr>
+                  <td>🥈 Silver</td>
+                  <td>500</td>
+                  <td>Priority support response</td>
+                </tr>
+                <tr>
+                  <td>🥇 Gold</td>
+                  <td>2,000</td>
+                  <td>Exclusive poll access</td>
+                </tr>
+                <tr>
+                  <td>🌟 Super Fan</td>
+                  <td>5,000</td>
+                  <td>Shoutout eligibility; gear discounts</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Tier thresholds may be adjusted with 14 days' notice. Your tier is re-evaluated at the start of each
+            calendar month based on your rolling 90-day points balance.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">04</div>
+          <h2>Streak Freeze</h2>
+          <p>A Streak Freeze (500 pts) protects your daily streak for one missed day. Rules:</p>
+          <ul>
+            <li>Only one Freeze may be held at a time.</li>
+            <li>A Freeze is consumed automatically on the first day you miss.</li>
+            <li>Freeze purchase is non-refundable once used.</li>
+            <li>Points deducted for a Freeze are not restored if the account is later deleted.</li>
+          </ul>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">05</div>
+          <h2>Digital Rewards (Airtime)</h2>
+          <p>Airtime rewards are fulfilled by <strong>Africa's Talking</strong> to Safaricom numbers only at this time.
+            By requesting airtime you consent to us sharing your mobile number with Africa's Talking solely for
+            disbursement.</p>
+          <ul>
+            <li>Airtime value = points redeemed ÷ 2 (e.g. 200 pts = KES 100 airtime).</li>
+            <li>Minimum redemption: 200 pts.</li>
+            <li>Maximum per day: 2,000 pts (KES 1,000 airtime).</li>
+            <li>Delivery is typically instant; allow up to 24 hours. If delivery fails, points are reinstated.</li>
+          </ul>
+          <div class="ls-callout gold">
+            <p>Airtime rewards are subject to availability and Kenya's applicable mobile money regulations. We reserve
+              the right to suspend airtime redemption if regulatory requirements change.</p>
+          </div>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">06</div>
+          <h2>Physical Gear Rewards</h2>
+          <div class="reward-grid">
+            <div class="reward-card">
+              <div class="icon">👕</div>
+              <div class="name">Leaf T-Shirt</div>
+              <div class="pts">2,000 pts</div>
+              <div class="refs">+ 3 referrals</div>
+            </div>
+            <div class="reward-card">
+              <div class="icon">🧥</div>
+              <div class="name">Forest Jacket</div>
+              <div class="pts">5,000 pts</div>
+              <div class="refs">+ 7 referrals</div>
+            </div>
+            <div class="reward-card">
+              <div class="icon">🫱</div>
+              <div class="name">Pulse Hoodie</div>
+              <div class="pts">8,000 pts</div>
+              <div class="refs">+ 12 referrals</div>
+            </div>
+          </div>
+          <ul>
+            <li>Both the point balance <strong>and</strong> the referral count must be met simultaneously.</li>
+            <li>Upon claiming, a voucher code is emailed. Collect the item at <strong>Kakamega Station</strong> within
+              <strong>90 days</strong>.</li>
+            <li>Items are subject to size and stock availability. We will contact you to confirm before dispatch.</li>
+            <li>Gear rewards cannot be exchanged for points, cash, or other items.</li>
+            <li>Lost voucher codes can be reissued once; contact support within the 90-day window.</li>
+          </ul>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">07</div>
+          <h2>Abuse &amp; Fraud</h2>
+          <p>The following actions will result in immediate point forfeiture and account suspension:</p>
+          <ul>
+            <li>Automated or scripted listening, tapping, or chatting to accumulate points.</li>
+            <li>Creating multiple accounts to exploit referral bonuses.</li>
+            <li>Using VPNs or proxies to circumvent scarcity multipliers.</li>
+            <li>Redeeming rewards under false pretences.</li>
+          </ul>
+          <p>Suspected fraud may be reported to the relevant authorities. Amaica Media reserves the right to recover the
+            value of fraudulently obtained rewards.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">08</div>
+          <h2>Tax</h2>
+          <p>Pulse Points and rewards are provided as a loyalty benefit. Under current Kenyan Revenue Authority
+            guidance, loyalty rewards of this nature are not classified as taxable income for the recipient. This may
+            change. You are responsible for any personal tax obligations that arise.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">09</div>
+          <h2>Changes to the Programme</h2>
+          <p>We may modify point values, tier thresholds, or available rewards at any time. Changes affecting existing
+            redeemable balances will be communicated in-app with at least <strong>14 days' notice</strong>. Continued
+            use after the notice period constitutes acceptance.</p>
+        </div>
+        <div class="ls-sec">
+          <div class="ls-sec-num">10</div>
+          <h2>Contact</h2>
+          <p>Redemption issues: <a href="mailto:info@amaicamedia.com">info@amaicamedia.com</a> or WhatsApp <a
+              href="https://wa.me/254715505284">+254 715 505 284</a>.</p>
+        </div>
+        <div class="ls-doc-footer"><span class="brand">Amaica Media · 98.7 FM</span>
+          <p>© 2025 Amaica Media. All rights reserved.</p>
+        </div>
+      </div>
     </div>
 
   </div><!-- /main-content -->
@@ -747,23 +1724,25 @@
   <!-- MINI PLAYER -->
   <div id="mini-player" onclick="navigateTo('player')">
     <div class="mp-art">
-      <span class="material-symbols-outlined" style="font-size:18px;color:var(--c-primary);font-variation-settings:'FILL' 1;z-index:1;">radio</span>
+      <span class="material-symbols-outlined"
+        style="font-size:18px;color:var(--c-primary);font-variation-settings:'FILL' 1;z-index:1;">radio</span>
       <div class="pulse-ring" id="pulse-ring"></div>
     </div>
     <div class="mp-info">
       <div class="mp-live-row">
         <span class="mp-live-dot"></span>
         <span class="mp-live-label">LIVE</span>
-        <span class="mp-freq">98.7 FM</span>
+        <span class="mp-freq"></span>
       </div>
-      <p class="mp-title" id="mini-show-title">Amaica Media</p>
+      <p class="mp-title" id="mini-show-title">Amaica Radio</p>
       <p class="mp-sub" id="connect-status">Tap to open player</p>
     </div>
     <div id="mini-wave" class="mp-wave-bars">
       <span></span><span></span><span></span><span></span><span></span>
     </div>
     <button class="mini-play" onclick="event.stopPropagation();toggleRadio()">
-      <span class="material-symbols-outlined" id="main-play" style="font-size:20px;font-variation-settings:'FILL' 1;">play_arrow</span>
+      <span class="material-symbols-outlined" id="main-play"
+        style="font-size:20px;font-variation-settings:'FILL' 1;">play_arrow</span>
     </button>
   </div>
 
@@ -794,6 +1773,57 @@
     style="display:none;position:fixed;inset:0;z-index:9999;background:var(--c-surface);overflow-y:auto;"></div>
 
   <script>
+    // ── Legal page navigation ────────────────────────────────────
+    function showLegalPage(name) {
+      document.querySelectorAll('#main-content .screen').forEach(s => s.classList.remove('active'));
+      var el = document.getElementById('screen-' + name);
+      if (el) { el.classList.add('active'); el.scrollTop = 0; }
+      document.getElementById('bottom-nav').style.display = 'none';
+      var mp = document.getElementById('mini-player');
+      if (mp) mp.style.display = 'none';
+      var vw = document.querySelector('.vibe-wrapper');
+      if (vw) vw.style.display = 'none';
+      window.scrollTo(0, 0);
+    }
+    function hideLegalPage() {
+      document.querySelectorAll('#main-content .screen').forEach(s => s.classList.remove('active'));
+      var settings = document.getElementById('screen-settings');
+      if (settings) settings.classList.add('active');
+      document.getElementById('bottom-nav').style.display = '';
+      var mp = document.getElementById('mini-player');
+      if (mp) mp.style.display = '';
+      var vw = document.querySelector('.vibe-wrapper');
+      if (vw) vw.style.display = '';
+      window.scrollTo(0, 0);
+    }
+
+    // ── Load recent chat messages into home preview ──────────────
+    document.addEventListener('DOMContentLoaded', function () {
+      function loadHomeChatPreview() {
+        if (!window._sb) { setTimeout(loadHomeChatPreview, 300); return; }
+        window._sb.from('messages')
+          .select('username, text, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5)
+          .then(({ data }) => {
+            const preview = document.getElementById('home-chat-preview');
+            if (!preview) return;
+            if (!data || !data.length) {
+              preview.innerHTML = '<div style="padding:12px 0;text-align:center;opacity:.35;font-size:.75rem;">No messages yet — say something!</div>';
+              return;
+            }
+            preview.innerHTML = '';
+            data.reverse().forEach(m => {
+              const div = document.createElement('div');
+              div.className = 'cpm';
+              div.innerHTML = '<div class="cpm-av">' + (m.username || '?').charAt(0).toUpperCase() + '</div><div class="cpm-body"><p class="cpm-user">' + (m.username || 'Listener') + '</p><p class="cpm-text">' + m.text + '</p></div>';
+              preview.appendChild(div);
+            });
+          });
+      }
+      loadHomeChatPreview();
+    });
+
     // Safety wrappers — ensure functions exist even if app.js hasn't loaded yet
     function openCallIn() { if (window._openCallIn) window._openCallIn(); else setTimeout(openCallIn, 300); }
     function openContactUs() { if (window._openContactUs) window._openContactUs(); else setTimeout(openContactUs, 300); }
@@ -813,7 +1843,6 @@
       }
       document.addEventListener('DOMContentLoaded', () => {
         initVersionTap();
-        setTimeout(() => { if (window.renderAppFooter) renderAppFooter(); }, 1500);
       });
     })();
   </script>

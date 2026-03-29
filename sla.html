@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Service Level Agreement — Amaica Media</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080808; --surface:#111; --surface2:#1a1a1a;
+  --border:rgba(255,255,255,0.07); --primary:#e84118; --gold:#fbc531;
+  --green:#76b82a;
+  --text:#f0f0f0; --muted:rgba(255,255,255,0.38);
+  --font-d:'Source Sans 3',sans-serif; --font-b:Verdana,Geneva,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+.shell{max-width:680px;margin:0 auto;padding:60px 24px 100px}
+.doc-header{margin-bottom:56px}
+.doc-tag{display:inline-block;font-family:var(--font-d);font-size:.62rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--primary);border:1px solid rgba(232,65,24,.35);border-radius:20px;padding:4px 12px;margin-bottom:18px}
+.doc-title{font-family:var(--font-d);font-size:clamp(2rem,6vw,3rem);font-weight:800;line-height:1.1;margin-bottom:14px}
+.doc-meta{font-size:.8rem;color:var(--muted)}
+.doc-meta span{margin-right:18px}
+.divider{height:1px;background:var(--border);margin:40px 0}
+.back-btn{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:7px 14px;margin-bottom:40px;transition:color .2s,border-color .2s}
+.back-btn:hover{color:var(--text);border-color:rgba(255,255,255,.2);text-decoration:none}
+.back-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sec{margin-bottom:40px}
+.sec-num{font-family:var(--font-d);font-size:.6rem;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--primary);margin-bottom:6px}
+.sec h2{font-family:var(--font-d);font-size:1.1rem;font-weight:800;margin-bottom:12px}
+.sec p{color:rgba(255,255,255,.75);margin-bottom:10px}
+.sec p:last-child{margin-bottom:0}
+.sec ul{color:rgba(255,255,255,.75);padding-left:18px;margin-bottom:10px}
+.sec ul li{margin-bottom:6px}
+.callout{background:rgba(232,65,24,.08);border:1px solid rgba(232,65,24,.2);border-radius:12px;padding:16px 20px;margin:16px 0}
+.callout p{color:rgba(255,255,255,.8);margin:0;font-size:.88rem}
+
+/* SLA-specific: uptime bars */
+.sla-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}
+@media(max-width:480px){.sla-grid{grid-template-columns:1fr}}
+.sla-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px}
+.sla-card .label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px}
+.sla-card .value{font-family:var(--font-d);font-size:1.6rem;font-weight:800;color:var(--green)}
+.sla-card .sub{font-size:.75rem;color:var(--muted);margin-top:2px}
+
+.table-wrap{overflow-x:auto;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;font-family:var(--font-d);font-size:.62rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--border)}
+td{padding:12px 14px;border-bottom:1px solid var(--border);color:rgba(255,255,255,.72);vertical-align:top}
+tr:last-child td{border-bottom:none}
+
+.doc-footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.doc-footer p{font-size:.72rem;color:var(--muted)}
+.doc-footer .brand{font-family:var(--font-d);font-weight:800;font-size:.8rem;color:var(--text)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <a class="back-btn" href="index.html">
+    <svg viewBox="0 0 16 16"><polyline points="10 3 5 8 10 13"/></svg>
+    Back
+  </a>
+
+  <header class="doc-header">
+    <div class="doc-tag">Legal</div>
+    <h1 class="doc-title">Service Level<br>Agreement</h1>
+    <div class="doc-meta">
+      <span>Effective: 1 January 2025</span>
+      <span>Version 1.0</span>
+    </div>
+  </header>
+
+  <div class="callout">
+    <p>This SLA describes the availability commitments for the Amaica Pulse App and the 98.7 FM live stream. It applies to all users of the free service.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- 1 -->
+  <div class="sec">
+    <div class="sec-num">01</div>
+    <h2>Service Targets</h2>
+    <div class="sla-grid">
+      <div class="sla-card">
+        <div class="label">App Uptime</div>
+        <div class="value">99%</div>
+        <div class="sub">Monthly target</div>
+      </div>
+      <div class="sla-card">
+        <div class="label">Stream Uptime</div>
+        <div class="value">97%</div>
+        <div class="sub">Monthly target</div>
+      </div>
+      <div class="sla-card">
+        <div class="label">Support Response</div>
+        <div class="value">24 h</div>
+        <div class="sub">Business days</div>
+      </div>
+      <div class="sla-card">
+        <div class="label">Incident Notice</div>
+        <div class="value">2 h</div>
+        <div class="sub">For outages &gt; 30 min</div>
+      </div>
+    </div>
+    <p>Uptime is measured as a percentage of minutes in the calendar month excluding scheduled maintenance windows.</p>
+  </div>
+
+  <!-- 2 -->
+  <div class="sec">
+    <div class="sec-num">02</div>
+    <h2>Scheduled Maintenance</h2>
+    <p>Planned maintenance is conducted between <strong>01:00 – 04:00 EAT</strong> on Sundays. We will post a notice in the App at least 24 hours in advance. Maintenance windows do not count against uptime calculations.</p>
+  </div>
+
+  <!-- 3 -->
+  <div class="sec">
+    <div class="sec-num">03</div>
+    <h2>Exclusions</h2>
+    <p>The following are not counted as downtime:</p>
+    <ul>
+      <li>Scheduled maintenance windows.</li>
+      <li>Outages caused by your internet service provider or mobile network.</li>
+      <li>Force majeure events (power grid failure, floods, government-ordered shutdowns).</li>
+      <li>Third-party streaming CDN outages beyond our direct control.</li>
+      <li>CA-ordered broadcast suspension.</li>
+    </ul>
+  </div>
+
+  <!-- 4 -->
+  <div class="sec">
+    <div class="sec-num">04</div>
+    <h2>Incident Classification</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Severity</th><th>Definition</th><th>Target Resolution</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>P1 — Critical</strong></td>
+            <td>Stream completely down; App inaccessible</td>
+            <td>4 hours</td>
+          </tr>
+          <tr>
+            <td><strong>P2 — High</strong></td>
+            <td>Points not recording; redemptions failing</td>
+            <td>12 hours</td>
+          </tr>
+          <tr>
+            <td><strong>P3 — Medium</strong></td>
+            <td>Chat or polls degraded; UI errors</td>
+            <td>48 hours</td>
+          </tr>
+          <tr>
+            <td><strong>P4 — Low</strong></td>
+            <td>Cosmetic issues; minor inaccuracies</td>
+            <td>Next release</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="sec">
+    <div class="sec-num">05</div>
+    <h2>Service Credits</h2>
+    <p>If monthly app uptime falls below 99%, affected registered users will receive a Pulse Points credit automatically:</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Uptime achieved</th><th>Credit</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>95% – 98.99%</td><td>100 Pulse Points</td></tr>
+          <tr><td>90% – 94.99%</td><td>250 Pulse Points</td></tr>
+          <tr><td>Below 90%</td><td>500 Pulse Points</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Credits are issued within 7 days of month-end. They have no cash value and are subject to the Pulse Points terms.</p>
+  </div>
+
+  <!-- 6 -->
+  <div class="sec">
+    <div class="sec-num">06</div>
+    <h2>Reporting an Incident</h2>
+    <p>Report outages via WhatsApp <a href="https://wa.me/254715505284">+254 715 505 284</a> or email <a href="mailto:info@amaicamedia.com">info@amaicamedia.com</a>. Include the time, your device type, and a brief description. We will acknowledge within 2 hours during business hours (Mon–Sat, 07:00–22:00 EAT).</p>
+  </div>
+
+  <!-- 7 -->
+  <div class="sec">
+    <div class="sec-num">07</div>
+    <h2>Changes to this SLA</h2>
+    <p>We may update targets upward (i.e. more favourable to users) at any time. Reductions in targets require 30 days' notice posted in the App.</p>
+  </div>
+
+  <div class="doc-footer">
+    <span class="brand">Amaica Media · 98.7 FM</span>
+    <p>© 2025 Amaica Media. All rights reserved.</p>
+  </div>
+
+</div>
+</body>
+</html>
